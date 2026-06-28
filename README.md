@@ -1,0 +1,1 @@
+This is the repository associated with the paper "Can Word Relatedness Inform Multilingual Lexical Complexity Prediction?" (Michael, Hülsing, Horbach; 2026).
