@@ -23,20 +23,35 @@ FEATURE_KEYS = [
     "F1: Lowest Shared Genetic Proto-Language",
     "F2: Borrowed from Source Language",
     "F3: Borrowed from Target Language",
-    "F4: Immediate Taxonomic Branch of English Word",
-    "F5: Origin Matches Source Language Family",
-    "F6: Descendant of the Same Proto-Word",
-    "F7: Descendant of the Same Proto-Root",
-    "F8: English Transmission Mechanism",
+    "F4: Borrowed from Same Third Language",
+    "F5: Immediate Taxonomic Branch of English Word",
+    "F6: Origin Matches Source Language Family",
+    "F7: Descendant of the Same Proto-Word",
+    "F8: Descendant of the Same Proto-Root",
+    "F9: English Transmission Mechanism",
 ]
 
-PROMPT_TEMPLATE = """You are an expert historical linguist.
-You will be presented with a source-target word pair ({source_lang} is the source language, English is the target language).
+FEATURE_RENAME_MAP = {
+    "F1: Lowest Shared Genetic Proto-Language": "lca_language",
+    "F2: Borrowed from Source Language": "borrowed_from_source",
+    "F3: Borrowed from Target Language": "borrowed_from_target",
+    "F4: Borrowed from Same Third Language": "borrowed_from_third",
+    "F5: Immediate Taxonomic Branch of English Word": "english_word_origin",
+    "F6: Origin Matches Source Language Family": "origin_matches_source_family",
+    "F7: Descendant of the Same Proto-Word": "same_proto_word",
+    "F8: Descendant of the Same Proto-Root": "same_proto_root",
+    "F9: English Transmission Mechanism": "transmission_path",
+}
+
+ROW_KEY_COLUMNS = ["item_id", "L1", "en_norm", "L1_source_word"]
+
+SYSTEM_PROMPT_TEMPLATE = """You are an expert historical linguist.
+You will be presented with a source-target word pair (possible source languages: German, Spanish, Mandarin Chinese; target language: English).
 You must return a JSON object (dictionary) corresponding to the features described below.
-You receive the Wiktionary etymology entries for the source and target words for additional context, if available.
+If available, you receive the Wiktionary etymology entries for the source and target words for additional context.
 If there is no Wiktionary information provided, please answer to the best of your ability.
-Since the POS tag of the source word is not given, we also present you with the source context.
-If there are multiple etymology entries for a source word, choose the one that matches the POS you infer from the source context as your reference.
+Since the POS tag of the source word is not given, we also present you with an example of the source word in context.
+If there are multiple etymology entries for a source word, choose the one that matches the POS and meaning you infer from the source context as your reference.
 ## Word Relatedness Features
 ---
 ### Feature 1: Lowest Shared Genetic Proto-Language
@@ -46,7 +61,7 @@ If there are multiple etymology entries for a source word, choose the one that m
 *   `Proto-West-Germanic`: Shared genetic ancestor at the West Germanic level.
 *   `Proto-Germanic`: Shared genetic ancestor at the broader Germanic level.
 *   `Proto-Indo-European`: Shared genetic ancestor at the PIE level.
-*   `None`: Used if the words do not share a reconstructed genetic proto-language, OR if their only shared history is via borrowing (e.g., both borrowed from Arabic or Latin).
+*   `None`: Applicable if the words do not share a reconstructed genetic proto-language, OR if their only shared history is via borrowing (e.g., both borrowed from French or Latin).
 **Further Comments:** None.
 ---
 ### Feature 2: Borrowed from Source Language
@@ -65,43 +80,50 @@ If there are multiple etymology entries for a source word, choose the one that m
 *   `1`: Source word was directly borrowed from English (e.g., German *Computer*, Spanish *fútbol*).
 **Further Comments:** None.
 ---
-### Feature 4: Immediate Taxonomic Branch of English Word
-**Description:** Classifies the broad language branch or family of the immediate predecessor from which English acquired the word. This does not ask for the specific language, but rather the linguistic category of the immediate donor or ancestor.
+### Feature 4: Borrowed from Same Third Language
+**Description:** Indicates whether both the source word and the English target word were borrowed from the same non-source, non-English donor language.
+**Type:** Binary
+**Values:**
+*   `0`: No evidence that both words were borrowed from the same third language.
+*   `1`: Both words were borrowed from the same third language (e.g., German *flexibel* and English *flexible* both from Latin/French transmission).
+**Further Comments:** This feature is independent from direct borrowing between source and target (Features 2 and 3).
+---
+### Feature 5: Immediate Taxonomic Branch of English Word
+**Description:** Classifies the broad language branch or family of the immediate predecessor from which modern English acquired the word. This does not ask for the specific language, but rather the taxonomic category of the immediate donor or ancestor.
 **Type:** Categorical
 **Values:**
 *   `Germanic`: Entered from Old English, Old Norse, Dutch, German, etc.
 *   `Romance`: Entered from French, Latin, Spanish, Italian, etc.
 *   `Hellenic`: Entered from Greek.
-*   `Semitic`: Entered from Arabic, Hebrew, etc.
 *   `Sinitic`: Entered from Mandarin, Cantonese, etc.
 *   `Other`: Any other taxonomic branch not covered above.
 **Further Comments:** None.
 ---
-### Feature 5: Origin Matches Source Language Family?
+### Feature 6: Origin Matches Source Language Family?
 **Description:** Determines if the immediate linguistic origin of the English target word aligns with the broader language family of the source word.
 **Type:** Binary
 **Values:**
 *   `0`: English target word origin does not match source language family.
 *   `1`: English target word origin matches source language family.
-**Further Comments:** Assign `1` if the English target word's immediate taxonomic branch (assigned in Feature 4) matches the broader language family of the source language. Specifically: if the source language is German, assign `1` if Feature 4 is 'Germanic'; if the source language is Spanish, assign `1` if Feature 4 is 'Romance'; if the source language is Mandarin Chinese, assign `1` if Feature 4 is 'Sinitic'. Otherwise, assign `0`.
+**Further Comments:** Assign `1` if the English target word's immediate taxonomic branch (assigned in Feature 5) matches the broader language family of the source language. Specifically: if the source language is German, assign `1` if Feature 5 is 'Germanic'; if the source language is Spanish, assign `1` if Feature 5 is 'Romance'; if the source language is Mandarin Chinese, assign `1` if Feature 5 is 'Sinitic'. Otherwise, assign `0`.
 ---
-### Feature 6: Descendant of the Same Proto-Word?
+### Feature 7: Descendant of the Same Proto-Word?
 **Description:** Evaluates if both words descend from the exact same reconstructed ancestral lexical item at the youngest shared proto-language stage.
 **Type:** Binary
 **Values:**
 *   `0`: Source and target words do not descend from the same reconstructed ancestral lexical item. They may share a broader root, but are not descendants of the same proto-word.
 *   `1`: Source and target words are descendants of the same reconstructed ancestral lexical item at the youngest relevant shared proto-language stage.
-**Further Comments:** "Proto-word" means a reconstructed lexical form, not merely a root or semantic concept. Two words count as sharing the same proto-word even if they diverged into different language branches. Direct cognacy does not require the modern forms to look similar. If a shared reconstructed lexical item exists, assign `1`. Examples: Spanish *padre* and English *father* both descend from PIE *\\*ph₂tḗr* (Assign 1). Spanish *pie* and English *foot* both descend from the exact same PIE proto-word *\\*pṓds* (Assign 1).
+**Further Comments:** "Proto-word" means a reconstructed lexical form, not merely a root or semantic concept. Two words count as sharing the same proto-word even if they diverged into different language branches. Direct cognacy does not require the modern forms to look similar. If a shared reconstructed lexical item exists, assign `1`. Examples: Spanish *padre* and English *father* both descend from PIE *ph₂tḗr (Assign 1). Spanish *pie* and English *foot* both descend from the exact same PIE proto-word *pṓds (Assign 1).
 ---
-### Feature 7: Descendant of the Same Proto-Root?
+### Feature 8: Descendant of the Same Proto-Root?
 **Description:** Evaluates if the words share a broader ancestral root or word family, specifically when they do not descend from the exact same reconstructed proto-word.
 **Type:** Binary
 **Values:**
 *   `0`: Source and target words do not share any reconstructable ancestral root or word family.
 *   `1`: Source and target words share a broader ancestral root or word family but are NOT descendants of the same reconstructed proto-word.
-**Further Comments:** Assign `1` if the words share a historical root or word family but do NOT descend from the exact same reconstructed proto-word. F6 and F7 are mutually exclusive based on the youngest shared ancestor: if they share a proto-word, assign F6=1 and F7=0. If they only share a broader root, assign F6=0 and F7=1. Example: Spanish *juventud* and English *youth* both stem from the shared Proto-Indo-European root for "young", but they do not descend from the exact same proto-word because the Italic and Germanic branches added completely different suffixes to that base root to form their respective nouns (F6=0, F7=1).
+**Further Comments:** Assign `1` if the words share a historical root or word family but do NOT descend from the exact same reconstructed proto-word. F7 and F8 are mutually exclusive based on the youngest shared ancestor: if they share a proto-word, assign F7=1 and F8=0. If they only share a broader root, assign F7=0 and F8=1. Example: Spanish *juventud* and English *youth* both stem from the shared Proto-Indo-European root for "young", but they do not descend from the exact same proto-word because the Italic and Germanic branches added completely different suffixes to that base root to form their respective nouns (F7=0, F8=1).
 ---
-### Feature 8: English Transmission Mechanism
+### Feature 9: English Transmission Mechanism
 **Description:** Describes the mechanical path of how the word reached Modern English, ignoring which languages were involved and focusing entirely on the complexity of the transmission history.
 **Type:** Categorical
 **Values:**
@@ -118,23 +140,29 @@ Source context:
 Mi padre siempre me da buenos consejos, y mi madre también.
 Wiktionary Info:
 Source word in Spanish Wiktionary:
-Inherited from Old Spanish padre ("father"), from Latin patrem, pater, from Proto-Italic patēr, from Proto-Indo-European ph₂tḗr.
+Del latín pater y este del protoindoeuropeo *ph̥₂tḗr. Compárese el protogermánico *faðer, el griego micénico pa-te, el griego clásico πατήρ (patér), el persa پدر (pedar) o el sánscrito पितृ (pitr).
+Source word in English Wiktionary:
+Inherited from Old Spanish padre (“father”), from Latin patrem, pater, from Proto-Italic *patēr, from Proto-Indo-European *ph₂tḗr.
+Target word in Spanish Wiktionary:
+Del inglés medio fader, del inglés antiguo fæder, del protogermánico occidental *fader, del protogermánico *fadēr, del protoindoeuropeo *ph̥₂tḗr.
 Target word in English Wiktionary:
-Inherited from Middle English fader, from Old English fæder, from Proto-West Germanic fader, from Proto-Germanic fadēr, from Proto-Indo-European ph₂tḗr, possibly from peh₂- + *-tḗr. Doublet of ayr, faeder, athair, padre, pater and père.
+Inherited from Middle English fader, from Old English fæder, from Proto-West Germanic fader, from Proto-Germanic fadēr, from Proto-Indo-European *ph₂tḗr, possibly from *peh₂- + *-tḗr. Doublet of ayr, faeder, athair, padre, pater and père.
 Output:
 {{
   "F1: Lowest Shared Genetic Proto-Language": "Proto-Indo-European",
   "F2: Borrowed from Source Language": 0,
   "F3: Borrowed from Target Language": 0,
-  "F4: Immediate Taxonomic Branch of English Word": "Germanic",
-  "F5: Origin Matches Source Language Family": 0,
-  "F6: Descendant of the Same Proto-Word": 1,
-  "F7: Descendant of the Same Proto-Root": 0,
-  "F8: English Transmission Mechanism": "Inherited"
+  "F4: Borrowed from Same Third Language": 0,
+  "F5: Immediate Taxonomic Branch of English Word": "Germanic",
+  "F6: Origin Matches Source Language Family": 0,
+  "F7: Descendant of the Same Proto-Word": 1,
+  "F8: Descendant of the Same Proto-Root": 0,
+  "F9: English Transmission Mechanism": "Inherited"
 }}
-## Your Task
+"""
+
+USER_PROMPT_TEMPLATE = """## Your Task
 Now, process the following word pair and return ONLY the JSON object. Do not include any markdown formatting, explanations, or text outside the JSON object.
-Input:
 Input:
 {source_lang} source word: {l1_source}
 English target word: {en_target}
@@ -160,7 +188,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "-m",
         "--model",
-        default="gpt-5",
+        default="gpt-5.6-luna",
         help="Model name (e.g. 'gpt-4o', 'gpt-5').",
     )
     parser.add_argument(
@@ -191,42 +219,52 @@ def parse_args() -> argparse.Namespace:
         help="Text file containing the OpenAI API key.",
     )
     parser.add_argument(
-        "--limit",
+        "--start-row",
         type=int,
-        default=20,
-        help="Optional row limit for testing/debugging.",
+        default=0,
+        help="First dataframe row to process (0-based, inclusive).",
+    )
+    parser.add_argument(
+        "--end-row",
+        type=int,
+        default=None,
+        help="Last dataframe row to process (0-based, exclusive).",
     )
     return parser.parse_args()
 
 
-def normalize_key(value: Any) -> str:
-    """Normalize values for dictionary lookup and matching."""
-    if value is None:
-        return ""
-    return str(value).strip().casefold()
+def select_rows(
+        dataframe: pd.DataFrame,
+        row_start: int,
+        row_end: int | None,
+) -> pd.DataFrame:
+    """Select a subset of rows from a dataframe."""
+    return dataframe.iloc[row_start:row_end].copy()
 
 
-def load_dataframe(path: Path, limit: int | None = None) -> pd.DataFrame:
-    """Load a CSV file into a pandas DataFrame with stable string values."""
-    dataframe = pd.read_csv(path, dtype=str, keep_default_na=False, nrows=limit)
-    return dataframe.fillna("")
+def build_row_key(row: dict[str, Any], key_columns: list[str] | None = None) -> tuple[str, ...]:
+    """Build a stable key for de-duplicating rows across runs."""
+    columns = key_columns or ROW_KEY_COLUMNS
+    return tuple(str(row.get(column, "")) for column in columns)
 
 
-def add_lookup_keys(dataframe: pd.DataFrame) -> pd.DataFrame:
-    """Create normalized lookup columns used for matching rows across files."""
-    keyed = dataframe.copy()
-    keyed["_l1_key"] = keyed["L1"].map(normalize_key)
-    keyed["_en_target_key"] = keyed["en_target_word"].map(normalize_key)
-    keyed["_source_key"] = keyed["L1_source_word"].map(normalize_key)
-    return keyed
+def get_existing_keys(existing_df: pd.DataFrame) -> set[tuple[str, ...]]:
+    """Collect row keys from an existing output dataframe."""
+    key_columns = [column for column in ROW_KEY_COLUMNS if column in existing_df.columns]
+    if not key_columns:
+        return set()
+    return {
+        tuple(str(row[column]) for column in key_columns)
+        for _, row in existing_df.iterrows()
+    }
 
 
 def build_etymology_lookup(
         etymology_df: pd.DataFrame,
 ) -> dict[tuple[str, str], pd.DataFrame]:
-    """Index etymology rows by normalized (L1, en_target_word)."""
+    """Index etymology rows by raw (L1, en_norm)."""
     lookup: dict[tuple[str, str], pd.DataFrame] = {}
-    for key, group in etymology_df.groupby(["_l1_key", "_en_target_key"], sort=False):
+    for key, group in etymology_df.groupby(["L1", "en_norm"], sort=False):
         lookup[(str(key[0]), str(key[1]))] = group
     return lookup
 
@@ -237,25 +275,23 @@ def select_etymology_row(
 ) -> dict[str, Any]:
     """Select the best etymology row for a data row."""
     key = (
-        normalize_key(data_row.get("L1")),
-        normalize_key(data_row.get("en_target_word")),
+        str(data_row.get("L1", "")),
+        str(data_row.get("en_norm", "")),
     )
     candidates = lookup.get(key)
     if candidates is None or candidates.empty:
         return {}
     if len(candidates) == 1:
         return cast(dict[str, Any], candidates.iloc[0].to_dict())
-    source_word = normalize_key(data_row.get("L1_source_word"))
-    source_matches = candidates[candidates["_source_key"] == source_word]
+    source_word = str(data_row.get("L1_source_word", ""))
+    source_matches = candidates[candidates["L1_source_word"] == source_word]
     if not source_matches.empty:
         return cast(dict[str, Any], source_matches.iloc[0].to_dict())
     return cast(dict[str, Any], candidates.iloc[0].to_dict())
 
 
-def parse_serialized_value(value: str) -> Any:
+def parse_serialized_value(value: Any) -> Any:
     """Parse a CSV cell that may contain JSON-serialized content."""
-    if value is None:
-        return ""
     text = str(value).strip()
     if not text:
         return ""
@@ -329,15 +365,14 @@ def format_etymology_entries(value: str) -> str:
 
 
 def build_prompt(data_row: dict[str, Any], etymology_row: dict[str, Any], l1_code: str) -> str:
-    """Build the prompt with just the variable data."""
+    """Build the user prompt with just the variable data."""
     metadata = LANGUAGE_METADATA[l1_code]
     suffix = metadata["suffix"]
     source_lang_name = metadata["name"]
-
-    return PROMPT_TEMPLATE.format(
+    return USER_PROMPT_TEMPLATE.format(
         source_lang=source_lang_name,
         l1_source=data_row.get("L1_source_word", ""),
-        en_target=data_row.get("en_target_word", ""),
+        en_target=data_row.get("en_norm", ""),
         source_context=data_row.get("L1_context", ""),
         source_etymology_l1=format_etymology_entries(etymology_row.get(f"source_etym_{suffix}", "")),
         source_etymology_en=format_etymology_entries(etymology_row.get("source_etym_en", "")),
@@ -390,15 +425,55 @@ def extract_response_text(response: Any) -> str:
     raise ValueError("Could not extract text from the OpenAI response.")
 
 
-def request_prediction(client: Any, model: str, prompt: str) -> str:
+# def count_tokens(text: str, model: str) -> int:
+#     """Count the number of tokens in the text using tiktoken."""
+#     try:
+#         import tiktoken
+#     except ImportError as exc:
+#         raise ImportError(
+#             "The 'tiktoken' package is required to count tokens. Install it first."
+#         ) from exc
+#     encoding = tiktoken.encoding_for_model(model)
+#     return len(encoding.encode(text))
+
+
+def request_prediction(client: Any, model: str, system_prompt: str, prompt: str) -> str:
     """Send the prompt to the model and return the response text."""
     response = client.chat.completions.create(
         model=model,
+        prompt_cache_key="word-relatedness-features-v1",
+        prompt_cache_options={
+            "mode": "explicit",
+        },
         messages=[
-            {"role": "system", "content": "You are an expert historical linguist."},
-            {"role": "user", "content": prompt},
+            {
+                "role": "system",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": system_prompt,
+                        "prompt_cache_breakpoint": {
+                            "mode": "explicit",
+                        },
+                    }
+                ],
+            },
+            {
+                "role": "user",
+                "content": prompt,
+            },
         ],
     )
+
+    # Optional: inspect cache effectiveness while testing.
+    # details = getattr(response.usage, "prompt_tokens_details", None)
+    # if details is not None:
+    #     print(
+    #         "  Cache usage: "
+    #         f"read={getattr(details, 'cached_tokens', 0)}, "
+    #         f"write={getattr(details, 'cache_write_tokens', 0)}"
+    #     )
+
     return extract_response_text(response)
 
 
@@ -428,21 +503,52 @@ def main() -> None:
     print(f"Reading etymology data from: {args.etymology_path}")
     print(f"Writing output to: {output_path}")
 
-    data_df = add_lookup_keys(load_dataframe(args.data_path, limit=args.limit))
-    etymology_df = add_lookup_keys(load_dataframe(args.etymology_path))
+    data_df = pd.read_csv(args.data_path, dtype=str, keep_default_na=False).fillna("")
+    data_df = select_rows(data_df, args.start_row, args.end_row)
+    etymology_df = pd.read_csv(args.etymology_path, dtype=str, keep_default_na=False).fillna("")
     etymology_lookup = build_etymology_lookup(etymology_df)
 
     if data_df.empty:
         raise ValueError(f"No rows found in {args.data_path}")
 
+    existing_output_df = None
+    existing_keys: set[tuple[str, ...]] = set()
+    if output_path.is_file() and output_path.stat().st_size > 0:
+        existing_output_df = pd.read_csv(output_path, dtype=str, keep_default_na=False).fillna("")
+        existing_keys = get_existing_keys(existing_output_df)
+
+    data_records = cast(list[dict[str, Any]], data_df.to_dict(orient="records"))
+    rows_to_process: list[dict[str, Any]] = []
+    for record in data_records:
+        row_key = build_row_key(record)
+        if row_key not in existing_keys:
+            rows_to_process.append(record)
+
+    if not rows_to_process:
+        print("No new rows to process; output already contains all selected rows.")
+        return
+
+    if existing_output_df is not None:
+        print(f"Found {len(existing_output_df)} existing output rows; skipping duplicates.")
+    print(f"Processing {len(rows_to_process)} row(s) out of {len(data_df)} selected row(s).")
+
     api_key = load_api_key(args.api_key_path)
     client = build_client(api_key)
 
-    output_rows: list[dict[str, Any]] = []
+    # Stream results to disk row-by-row so long runs can be resumed safely.
+    output_columns = [
+        "item_id",
+        "L1",
+        "en_norm",
+        "L1_source_word",
+        *[FEATURE_RENAME_MAP[key] for key in FEATURE_KEYS],
+    ]
+    write_header = not output_path.is_file() or output_path.stat().st_size == 0
+    written_count = 0
 
-    for index, row in enumerate(data_df.to_dict(orient="records"), start=1):
+    for index, row in enumerate(rows_to_process, start=1):
         data_row = cast(dict[str, Any], row)
-        l1_code = normalize_key(data_row.get("L1"))
+        l1_code = str(data_row.get("L1", ""))
 
         if l1_code not in LANGUAGE_METADATA:
             raise ValueError(
@@ -450,26 +556,36 @@ def main() -> None:
             )
 
         etymology_row = select_etymology_row(data_row, etymology_lookup)
+        system_prompt = SYSTEM_PROMPT_TEMPLATE
         prompt = build_prompt(data_row, etymology_row, l1_code)
-        raw_response = request_prediction(client, args.model, prompt)
+        # print(prompt)
+        raw_response = request_prediction(client, args.model, system_prompt, prompt)
         prediction = parse_prediction(raw_response)
 
         output_row = {
             "item_id": data_row.get("item_id", ""),
             "L1": data_row.get("L1", ""),
-            "en_target_word": data_row.get("en_target_word", ""),
+            "en_norm": data_row.get("en_norm", ""),
+            "L1_source_word": data_row.get("L1_source_word", ""),
         }
-        output_row.update({key: prediction.get(key, "") for key in FEATURE_KEYS})
-        output_rows.append(output_row)
+        output_row.update({FEATURE_RENAME_MAP[key]: prediction.get(key, "") for key in FEATURE_KEYS})
+
+        pd.DataFrame([output_row], columns=output_columns).to_csv(
+            output_path,
+            mode="a",
+            header=write_header,
+            index=False,
+            encoding="utf-8",
+        )
+        write_header = False
+        written_count += 1
 
         print(
-            f"[{index}/{len(data_df)}] {data_row.get('L1_source_word', '')} -> "
-            f"{data_row.get('en_target_word', '')}"
+            f"[{index}/{len(rows_to_process)}] {data_row.get('L1_source_word', '')} -> "
+            f"{data_row.get('en_norm', '')}"
         )
 
-    output_df = pd.DataFrame(output_rows)
-    output_df.to_csv(output_path, index=False, encoding="utf-8")
-    print(f"Done! Output saved to {output_path}")
+    print(f"Done! Appended {written_count} row(s) to {output_path}")
 
 
 if __name__ == "__main__":

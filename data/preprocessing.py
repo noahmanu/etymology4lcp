@@ -13,9 +13,9 @@ Columns added:
                German markers removed, comma-separated alternatives preserved
     l1_closest : comma-split L1 alternative (whitespace removed) with minimum geo
                  Levenshtein-based distance to en_norm
-    levensht   : raw Levenshtein distance for l1_closest vs en_norm
-    levensht_geo_norm : Levenshtein distance normalized by sqrt(len(a))*sqrt(len(b))
-    levensht_norm : Levenshtein distance normalized by max(len(a), len(b))
+    char_edit_dist   : raw Levenshtein distance for l1_closest vs en_norm
+    char_edit_dist_geo_norm : Levenshtein distance normalized by sqrt(len(a))*sqrt(len(b))
+    char_edit_dist_norm : Levenshtein distance normalized by max(len(a), len(b))
 """
 
 import unicodedata
@@ -165,7 +165,7 @@ def clean_l1_translation(text: str, l1: str) -> str:
     return _finalize_l1_alternatives(text)
 
 
-def levensht_geo_normalized(a: str, b: str) -> float:
+def char_edit_dist_geo_normalized(a: str, b: str) -> float:
     """Levenshtein distance normalized by sqrt(len(a))*sqrt(len(b))."""
     dist = Levenshtein.distance(str(a), str(b))
     len_a = max(len(str(a)), 1)
@@ -173,7 +173,7 @@ def levensht_geo_normalized(a: str, b: str) -> float:
     return dist / math.sqrt(len_a) / math.sqrt(len_b)
 
 
-def levensht_maxlen_normalized(a: str, b: str) -> float:
+def char_edit_dist_maxlen_normalized(a: str, b: str) -> float:
     """Levenshtein distance normalized by the longer of the two word lengths."""
     dist = Levenshtein.distance(str(a), str(b))
     len_a = len(str(a))
@@ -193,10 +193,10 @@ def find_best_l1_match(en_text: str, l1_clean_text: str) -> tuple[str, float, fl
     if not alternatives:
         return "", float("nan"), float("nan"), float("nan")
 
-    best_alt = min(alternatives, key=lambda alt: levensht_geo_normalized(en_for_dist, alt))
+    best_alt = min(alternatives, key=lambda alt: char_edit_dist_geo_normalized(en_for_dist, alt))
     raw_dist = float(Levenshtein.distance(en_for_dist, best_alt))
-    geo_norm_dist = float(levensht_geo_normalized(en_for_dist, best_alt))
-    norm_dist = float(levensht_maxlen_normalized(en_for_dist, best_alt))
+    geo_norm_dist = float(char_edit_dist_geo_normalized(en_for_dist, best_alt))
+    norm_dist = float(char_edit_dist_maxlen_normalized(en_for_dist, best_alt))
 
     return best_alt, raw_dist, geo_norm_dist, norm_dist
 
@@ -225,7 +225,7 @@ def preprocess_pooled(
     -------
     pd.DataFrame
         Preprocessed dataset with en_norm, l1_norm, l1_clean, l1_closest,
-        levensht, levensht_geo_norm, and levensht_norm columns added.
+        char_edit_dist, char_edit_dist_geo_norm, and char_edit_dist_norm columns added.
     """
     # Set default paths
     if input_path is None:
@@ -265,9 +265,9 @@ def preprocess_pooled(
         find_best_l1_match(en_word, l1_word)
         for en_word, l1_word in zip(df["en_norm"].tolist(), df["l1_clean"].tolist())
     ]
-    df[["l1_closest", "levensht", "levensht_geo_norm", "levensht_norm"]] = pd.DataFrame(
+    df[["l1_closest", "char_edit_dist", "char_edit_dist_geo_norm", "char_edit_dist_norm"]] = pd.DataFrame(
         best_matches,
-        columns=["l1_closest", "levensht", "levensht_geo_norm", "levensht_norm"],
+        columns=["l1_closest", "char_edit_dist", "char_edit_dist_geo_norm", "char_edit_dist_norm"],
         index=df.index,
     )
 
@@ -277,9 +277,9 @@ def preprocess_pooled(
         print("  - l1_norm:  L1 with brackets/markers/slashes removed, preserving case and diacritics")
         print("  - l1_clean: cleaned L1 (brackets removed, alternatives preserved, lowercased)")
         print("  - l1_closest: best L1 alternative by normalized edit distance")
-        print("  - levensht: raw edit distance for l1_closest")
-        print("  - levensht_geo_norm: edit distance normalized by sqrt(len(a))*sqrt(len(b))")
-        print("  - levensht_norm: edit distance normalized by max(len(a), len(b))")
+        print("  - char_edit_dist: raw edit distance for l1_closest")
+        print("  - char_edit_dist_geo_norm: edit distance normalized by sqrt(len(a))*sqrt(len(b))")
+        print("  - char_edit_dist_norm: edit distance normalized by max(len(a), len(b))")
 
         # Show examples
         print("\nExample preprocessed instances:")
@@ -292,9 +292,9 @@ def preprocess_pooled(
             print(f"  Original L1: {row['L1_source_word']}")
             print(f"  Cleaned:     {row['l1_clean']}")
             print(f"  Closest:     {row['l1_closest']}")
-            print(f"  levensht:    {row['levensht']}")
-            print(f"  geo norm:   {row['levensht_geo_norm']}")
-            print(f"  norm:        {row['levensht_norm']}")
+            print(f"  char_edit_dist:    {row['char_edit_dist']}")
+            print(f"  geo norm:   {row['char_edit_dist_geo_norm']}")
+            print(f"  norm:        {row['char_edit_dist_norm']}")
 
     # Save preprocessed data
     df.to_csv(output_path, index=False)
@@ -319,9 +319,9 @@ if __name__ == "__main__":
     print(f"  Non-empty en_norm: {df['en_norm'].notna().sum():,}")
     print(f"  Non-empty l1_clean: {df['l1_clean'].notna().sum():,}")
     print(f"  Non-empty l1_closest: {df['l1_closest'].notna().sum():,}")
-    print(f"  Non-empty levensht: {df['levensht'].notna().sum():,}")
-    print(f"  Non-empty levensht_geo_norm: {df['levensht_geo_norm'].notna().sum():,}")
-    print(f"  Non-empty levensht_norm: {df['levensht_norm'].notna().sum():,}")
+    print(f"  Non-empty char_edit_dist: {df['char_edit_dist'].notna().sum():,}")
+    print(f"  Non-empty char_edit_dist_geo_norm: {df['char_edit_dist_geo_norm'].notna().sum():,}")
+    print(f"  Non-empty char_edit_dist_norm: {df['char_edit_dist_norm'].notna().sum():,}")
 
     # Count instances with comma-separated alternatives
     has_alternatives = df['l1_clean'].str.contains(',', na=False).sum()
