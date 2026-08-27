@@ -4,15 +4,24 @@
 import argparse
 import json
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
+import numpy as np
 import pandas as pd
 
 from roberta_cv_utils import ID_COLUMN, rmse_pearson
 
 OUTER_FOLDS = [1, 2, 3, 4, 5]
 L1_COLUMN = "L1"
+LEVENSHTEIN_COLUMN = "char_edit_dist_norm"
 ROW_KEY_COLUMNS = [ID_COLUMN, L1_COLUMN]
+
+# Overlapping sliding windows: [0.0-0.2, 0.1-0.3, ..., 0.8-1.0]
+LEVENSHTEIN_WINDOWS: List[Tuple[float, float]] = [
+    (round(lo, 1), round(lo + 0.2, 1))
+    for lo in np.arange(0.0, 0.9, 0.1)
+]
+MIN_WINDOW_ROWS = 0  # skip a window if fewer than this many rows
 
 
 def parse_args() -> argparse.Namespace:
@@ -39,23 +48,48 @@ def metrics_from_df(df: pd.DataFrame) -> Dict[str, float]:
     return rmse_pearson(df["GLMM_score"].to_numpy(), df["roberta_base_score"].to_numpy())
 
 
-def metrics_by_l1(df: pd.DataFrame) -> Dict[str, Dict[str, float]]:
-    if L1_COLUMN not in df.columns:
-        raise ValueError(f"Missing required column for per-L1 metrics: {L1_COLUMN}")
+def unique_row_key_count(df: pd.DataFrame) -> int:
+    return int(df[ROW_KEY_COLUMNS].drop_duplicates().shape[0])
 
-    grouped = {}
+
+def metrics_for_window(
+    df: pd.DataFrame, lo: float, hi: float
+) -> Optional[Dict]:
+    """Return metrics for rows where LEVENSHTEIN_COLUMN is in [lo, hi], or None if too sparse."""
+    if LEVENSHTEIN_COLUMN not in df.columns:
+        return None
+    mask = (df[LEVENSHTEIN_COLUMN] >= lo) & (df[LEVENSHTEIN_COLUMN] <= hi)
+    sub = df.loc[mask]
+    if len(sub) < MIN_WINDOW_ROWS:
+        return None
+    return {
+        **metrics_from_df(sub),
+        "n_rows": int(len(sub)),
+    }
+
+
+def metrics_by_l1_and_windows(df: pd.DataFrame) -> Dict[str, Dict]:
+    """Per-L1 metrics, each with a nested per-Levenshtein-window breakdown."""
+    if L1_COLUMN not in df.columns:
+        raise ValueError(f"Missing required column: {L1_COLUMN}")
+
+    result = {}
     for l1, group_df in df.groupby(L1_COLUMN, dropna=False):
         l1_key = "NA" if pd.isna(l1) else str(l1)
-        grouped[l1_key] = {
+        windows = {}
+        for lo, hi in LEVENSHTEIN_WINDOWS:
+            window_key = f"{lo:.1f}-{hi:.1f}"
+            window_metrics = metrics_for_window(group_df, lo, hi)
+            if window_metrics is not None:
+                windows[window_key] = window_metrics
+
+        result[l1_key] = {
             **metrics_from_df(group_df),
             "n_rows": int(len(group_df)),
             "n_unique_item_id": int(group_df[ID_COLUMN].nunique()),
+            "levenshtein_windows": windows,
         }
-    return grouped
-
-
-def unique_row_key_count(df: pd.DataFrame) -> int:
-    return int(df[ROW_KEY_COLUMNS].drop_duplicates().shape[0])
+    return result
 
 
 def main() -> None:
@@ -82,14 +116,14 @@ def main() -> None:
                 "n_rows": int(len(oof_df)),
                 "n_unique_item_id": int(oof_df[ID_COLUMN].nunique()),
                 "n_unique_item_l1": unique_row_key_count(oof_df),
-                "per_l1": metrics_by_l1(oof_df),
+                "per_l1": metrics_by_l1_and_windows(oof_df),
             },
             "outer_test": {
                 **test_metrics,
                 "n_rows": int(len(test_df)),
                 "n_unique_item_id": int(test_df[ID_COLUMN].nunique()),
                 "n_unique_item_l1": unique_row_key_count(test_df),
-                "per_l1": metrics_by_l1(test_df),
+                "per_l1": metrics_by_l1_and_windows(test_df),
             },
         }
 
@@ -109,8 +143,8 @@ def main() -> None:
 
     full_test_metrics = metrics_from_df(all_test_df)
     pooled_oof_metrics = metrics_from_df(all_oof_df)
-    full_test_per_l1 = metrics_by_l1(all_test_df)
-    pooled_oof_per_l1 = metrics_by_l1(all_oof_df)
+    full_test_per_l1 = metrics_by_l1_and_windows(all_test_df)
+    pooled_oof_per_l1 = metrics_by_l1_and_windows(all_oof_df)
 
     summary = {
         "predictions_dir": str(args.predictions_dir),
@@ -147,6 +181,11 @@ def main() -> None:
             f"  L1={l1}: RMSE={l1_metrics['rmse']:.4f}, "
             f"Pearson={l1_metrics['pearson']:.4f}, n={l1_metrics['n_rows']}"
         )
+        for window_key, wm in l1_metrics.get("levenshtein_windows", {}).items():
+            print(
+                f"    levenshtein [{window_key}]: "
+                f"RMSE={wm['rmse']:.4f}, Pearson={wm['pearson']:.4f}, n={wm['n_rows']}"
+            )
     print(f"Saved summary metrics to: {output_json}")
 
 
