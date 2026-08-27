@@ -26,7 +26,7 @@ from roberta_cv_utils import (
 )
 
 
-PREDICTION_METADATA_COLUMNS = ["L1", "en_target_word", "L1_source_word"]
+PREDICTION_METADATA_COLUMNS = ["L1", "en_target_word", "L1_source_word", "char_edit_dist_norm"]
 ROW_KEY_COLUMNS = [ID_COLUMN, "L1"]
 
 
@@ -93,6 +93,7 @@ def main() -> None:
                     "L1": inner_test_df["L1"].values,
                     "en_target_word": inner_test_df["en_target_word"].values,
                     "L1_source_word": inner_test_df["L1_source_word"].values,
+                    "char_edit_dist_norm": inner_test_df["char_edit_dist_norm"].values,
                     "roberta_base_score": preds,
                     "GLMM_score": inner_test_df["GLMM_score"].values,
                     "outer_fold": outer_fold,
@@ -149,6 +150,7 @@ def main() -> None:
                 "L1": outer_test_df["L1"].values,
                 "en_target_word": outer_test_df["en_target_word"].values,
                 "L1_source_word": outer_test_df["L1_source_word"].values,
+                "char_edit_dist_norm": outer_test_df["char_edit_dist_norm"].values,
                 "roberta_base_score": outer_test_preds,
                 "GLMM_score": outer_test_df["GLMM_score"].values,
                 "outer_fold": outer_fold,
@@ -162,9 +164,6 @@ def main() -> None:
         )
 
         metrics = {
-            # Keep top-level keys for backwards compatibility with existing readers.
-            "rmse": oof_metrics["rmse"],
-            "pearson": oof_metrics["pearson"],
             "outer_train_oof": oof_metrics,
             "outer_test": outer_test_metrics,
         }
