@@ -45,7 +45,18 @@ def load_fold_predictions(predictions_dir: Path, outer_fold: int) -> Tuple[pd.Da
 
 
 def metrics_from_df(df: pd.DataFrame) -> Dict[str, float]:
-    return rmse_pearson(df["GLMM_score"].to_numpy(), df["roberta_base_score"].to_numpy())
+    labels = df["GLMM_score"].to_numpy()
+    preds = df["roberta_base_score"].to_numpy()
+    n = len(df)
+
+    if n == 0:
+        return {"rmse": float("nan"), "pearson": float("nan")}
+    if n == 1:
+        # Pearson is undefined for a single pair; keep RMSE available for debugging.
+        rmse = float(np.sqrt(np.mean((labels - preds) ** 2)))
+        return {"rmse": rmse, "pearson": float("nan")}
+
+    return rmse_pearson(labels, preds)
 
 
 def unique_row_key_count(df: pd.DataFrame) -> int:
@@ -80,17 +91,23 @@ def metrics_by_l1_and_windows(df: pd.DataFrame) -> Dict[str, Dict]:
         l1_key = "NA" if pd.isna(l1) else str(l1)
         windows = {}
         missing_windows = []
+        single_row_windows = []
         for lo, hi in LEVENSHTEIN_WINDOWS:
             window_key = f"{lo:.1f}-{hi:.1f}"
             window_metrics = metrics_for_window(group_df, lo, hi)
             if window_metrics is not None:
                 windows[window_key] = window_metrics
+                if window_metrics.get("n_rows") == 1:
+                    single_row_windows.append(window_key)
             else:
                 missing_windows.append(window_key)
 
         # Debug helper (uncomment when needed): print empty/sparse windows for each L1.
         if missing_windows:
             print(f"[DEBUG] L1={l1_key} missing windows: {', '.join(missing_windows)}")
+        # Debug helper (uncomment when needed): print windows with exactly one row for each L1.
+        if single_row_windows:
+            print(f"[DEBUG] L1={l1_key} single-row windows: {', '.join(single_row_windows)}")
 
         result[l1_key] = {
             **metrics_from_df(group_df),
