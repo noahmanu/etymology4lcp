@@ -18,3 +18,4 @@ scipy==1.18.1
 syllables==1.1.5
 torch==2.13.0
 transformers==5.15.1
+accelerate>=1.1.0

@@ -4,14 +4,14 @@
 set -euo pipefail
 
 JOB_PREFIX="roberta_cv"
-TIME_LIMIT="08:00:00"
+TIME_LIMIT="00:20:00"
 MEMORY="24G"
 CPUS_PER_TASK=4
 PARTITION="gpu"
 
 # Adjust these two paths for your HPC setup.
-VENV="/gxfs_work/cau/sunpn1134/venvs/bea_env"
-PROJECT_DIR="/gxfs_work/cau/sunpn1134/ipn_beavocabst26"
+VENV="/gxfs_work/cau/sunpn1134/wordrel4lcp/wordrel_env"
+PROJECT_DIR="/gxfs_work/cau/sunpn1134/wordrel4lcp"
 
 SCRIPT_PATH="${PROJECT_DIR}/models/finetune_roberta_cv.py"
 LOG_DIR="${PROJECT_DIR}/models/logs"
