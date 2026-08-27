@@ -21,7 +21,7 @@ LEVENSHTEIN_WINDOWS: List[Tuple[float, float]] = [
     (round(lo, 1), round(lo + 0.2, 1))
     for lo in np.arange(0.0, 0.9, 0.1)
 ]
-MIN_WINDOW_ROWS = 0  # skip a window if fewer than this many rows
+MIN_WINDOW_ROWS = 1  # skip a window if fewer than this many rows
 
 
 def parse_args() -> argparse.Namespace:
@@ -60,6 +60,8 @@ def metrics_for_window(
         return None
     mask = (df[LEVENSHTEIN_COLUMN] >= lo) & (df[LEVENSHTEIN_COLUMN] <= hi)
     sub = df.loc[mask]
+    if sub.empty:
+        return None
     if len(sub) < MIN_WINDOW_ROWS:
         return None
     return {
@@ -77,11 +79,18 @@ def metrics_by_l1_and_windows(df: pd.DataFrame) -> Dict[str, Dict]:
     for l1, group_df in df.groupby(L1_COLUMN, dropna=False):
         l1_key = "NA" if pd.isna(l1) else str(l1)
         windows = {}
+        missing_windows = []
         for lo, hi in LEVENSHTEIN_WINDOWS:
             window_key = f"{lo:.1f}-{hi:.1f}"
             window_metrics = metrics_for_window(group_df, lo, hi)
             if window_metrics is not None:
                 windows[window_key] = window_metrics
+            else:
+                missing_windows.append(window_key)
+
+        # Debug helper (uncomment when needed): print empty/sparse windows for each L1.
+        if missing_windows:
+            print(f"[DEBUG] L1={l1_key} missing windows: {', '.join(missing_windows)}")
 
         result[l1_key] = {
             **metrics_from_df(group_df),
