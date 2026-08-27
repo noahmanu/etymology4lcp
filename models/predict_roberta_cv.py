@@ -26,6 +26,10 @@ from roberta_cv_utils import (
 )
 
 
+PREDICTION_METADATA_COLUMNS = ["L1", "en_target_word", "L1_source_word"]
+ROW_KEY_COLUMNS = [ID_COLUMN, "L1"]
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Predict GLMM scores with trained RoBERTa CV models.")
     parser.add_argument("--folds-dir", type=Path, default=Path("../data/feature_enriched/folds"))
@@ -63,7 +67,8 @@ def predict_with_model(model_dir: Path, tokenized_ds: Dataset, batch_size: int) 
 
 def save_predictions(df: pd.DataFrame, out_path: Path) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    df.sort_values(ID_COLUMN).to_csv(out_path, index=False)
+    sort_cols = ROW_KEY_COLUMNS if all(c in df.columns for c in ROW_KEY_COLUMNS) else [ID_COLUMN]
+    df.sort_values(sort_cols).to_csv(out_path, index=False)
 
 
 def main() -> None:
@@ -85,6 +90,9 @@ def main() -> None:
             fold_pred_df = pd.DataFrame(
                 {
                     ID_COLUMN: inner_test_df[ID_COLUMN].values,
+                    "L1": inner_test_df["L1"].values,
+                    "en_target_word": inner_test_df["en_target_word"].values,
+                    "L1_source_word": inner_test_df["L1_source_word"].values,
                     "roberta_base_score": preds,
                     "GLMM_score": inner_test_df["GLMM_score"].values,
                     "outer_fold": outer_fold,
@@ -94,13 +102,39 @@ def main() -> None:
             oof_frames.append(fold_pred_df)
 
         oof_df = pd.concat(oof_frames, ignore_index=True)
-        if oof_df[ID_COLUMN].nunique() != outer_train_df[ID_COLUMN].nunique():
-            raise ValueError(f"OOF coverage mismatch in outer fold {outer_fold}")
+        duplicated_oof_row_keys = int(oof_df.duplicated(ROW_KEY_COLUMNS).to_numpy().sum())
+        if duplicated_oof_row_keys:
+            raise ValueError(
+                f"Duplicate OOF row keys in outer fold {outer_fold}: "
+                f"{duplicated_oof_row_keys} duplicate ({ID_COLUMN}, L1) pairs"
+            )
 
-        metrics = rmse_pearson(oof_df["GLMM_score"].to_numpy(), oof_df["roberta_base_score"].to_numpy())
+        oof_keys = oof_df[ROW_KEY_COLUMNS].drop_duplicates()
+        outer_train_keys = outer_train_df[ROW_KEY_COLUMNS].drop_duplicates()
+        key_coverage = outer_train_keys.merge(oof_keys, on=ROW_KEY_COLUMNS, how="left", indicator=True)
+        if not (key_coverage["_merge"] == "both").all() or len(oof_keys) != len(outer_train_keys):
+            missing_pairs = int((key_coverage["_merge"] != "both").sum())
+            raise ValueError(
+                f"OOF coverage mismatch in outer fold {outer_fold}: "
+                f"missing {missing_pairs} ({ID_COLUMN}, L1) pairs"
+            )
+
+        oof_metrics = rmse_pearson(oof_df["GLMM_score"].to_numpy(), oof_df["roberta_base_score"].to_numpy())
 
         outer_output_dir = args.output_dir / f"outer_fold_{outer_fold}"
-        save_predictions(oof_df[[ID_COLUMN, "roberta_base_score", "GLMM_score", "inner_fold"]], outer_output_dir / "outer_train_oof_predictions.csv")
+        save_predictions(
+            oof_df[
+                [
+                    ID_COLUMN,
+                    *PREDICTION_METADATA_COLUMNS,
+                    "roberta_base_score",
+                    "GLMM_score",
+                    "outer_fold",
+                    "inner_fold",
+                ]
+            ],
+            outer_output_dir / "outer_train_oof_predictions.csv",
+        )
 
         # Predict outer test with final model trained on full outer train.
         final_model_dir = model_run_dir(args.models_dir, outer_fold, "final", None)
@@ -112,6 +146,9 @@ def main() -> None:
         outer_test_pred_df = pd.DataFrame(
             {
                 ID_COLUMN: outer_test_df[ID_COLUMN].values,
+                "L1": outer_test_df["L1"].values,
+                "en_target_word": outer_test_df["en_target_word"].values,
+                "L1_source_word": outer_test_df["L1_source_word"].values,
                 "roberta_base_score": outer_test_preds,
                 "GLMM_score": outer_test_df["GLMM_score"].values,
                 "outer_fold": outer_fold,
@@ -119,8 +156,25 @@ def main() -> None:
         )
         save_predictions(outer_test_pred_df, outer_output_dir / "outer_test_predictions.csv")
 
+        outer_test_metrics = rmse_pearson(
+            outer_test_pred_df["GLMM_score"].to_numpy(),
+            outer_test_pred_df["roberta_base_score"].to_numpy(),
+        )
+
+        metrics = {
+            # Keep top-level keys for backwards compatibility with existing readers.
+            "rmse": oof_metrics["rmse"],
+            "pearson": oof_metrics["pearson"],
+            "outer_train_oof": oof_metrics,
+            "outer_test": outer_test_metrics,
+        }
+
         (outer_output_dir / "metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
-        print(f"outer_fold_{outer_fold}: OOF RMSE={metrics['rmse']:.4f}, Pearson={metrics['pearson']:.4f}")
+        print(
+            f"outer_fold_{outer_fold}: "
+            f"OOF RMSE={oof_metrics['rmse']:.4f}, Pearson={oof_metrics['pearson']:.4f} | "
+            f"Outer test RMSE={outer_test_metrics['rmse']:.4f}, Pearson={outer_test_metrics['pearson']:.4f}"
+        )
 
 
 if __name__ == "__main__":
