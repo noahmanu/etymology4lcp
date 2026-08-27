@@ -32,8 +32,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--inner-fold", type=int, choices=[1, 2, 3, 4])
     parser.add_argument("--folds-dir", type=Path, default=Path("../data/feature_enriched/folds"))
     parser.add_argument("--models-dir", type=Path, default=Path("./roberta_models"))
-    parser.add_argument("--epochs", type=int, default=3)
-    parser.add_argument("--batch-size", type=int, default=16)
+    parser.add_argument("--epochs", type=int, default=5)
+    parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--max-length", type=int, default=256)
     parser.add_argument("--seed", type=int, default=667)
     return parser.parse_args()
@@ -73,12 +73,11 @@ def main() -> None:
     data_collator = DataCollatorWithPadding(tokenizer)
 
     training_args = TrainingArguments(
-        output_dir=str(run_dir / "checkpoints"),
+        output_dir=str(run_dir),
         eval_strategy="no",
-        save_strategy="epoch",
+        save_strategy="no",
         logging_strategy="steps",
         logging_steps=50,
-        save_total_limit=1,
         learning_rate=3e-5,
         weight_decay=0.1,
         warmup_ratio=0.1,

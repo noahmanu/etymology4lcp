@@ -19,7 +19,7 @@ LABEL_COLUMN = "GLMM_score"
 ID_COLUMN = "item_id"
 
 # Local path to pre-downloaded RoBERTa-base model (HPC cluster has no internet)
-PRETRAINED_MODEL_PATH = "/gxfs_work/cau/sunpn1134/models/roberta-base"
+PRETRAINED_MODEL_PATH = "/gxfs_work/cau/sunpn1134/.cache/huggingface/hub/models--xlm-roberta-base/snapshots/e73636d4f797dec63c3081bb6ed5c7b0bb3f2089"
 
 
 def set_seed(seed: int) -> None:
