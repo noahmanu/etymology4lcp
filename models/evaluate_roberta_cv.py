@@ -21,7 +21,7 @@ LEVENSHTEIN_WINDOWS: List[Tuple[float, float]] = [
     (round(lo, 1), round(lo + 0.2, 1))
     for lo in np.arange(0.0, 0.9, 0.1)
 ]
-MIN_WINDOW_ROWS = 3  # skip a window if fewer than this many rows
+MIN_WINDOW_ROWS = 50  # skip a window if fewer than this many rows
 
 
 def parse_args() -> argparse.Namespace:

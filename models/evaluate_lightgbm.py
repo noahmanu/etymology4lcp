@@ -22,7 +22,7 @@ LEVENSHTEIN_WINDOWS: List[Tuple[float, float]] = [
     (round(float(lo), 1), round(float(lo) + 0.2, 1))
     for lo in np.arange(0.0, 0.9, 0.1)
 ]
-MIN_WINDOW_ROWS = 3
+MIN_WINDOW_ROWS = 50
 
 
 def parse_args() -> argparse.Namespace:

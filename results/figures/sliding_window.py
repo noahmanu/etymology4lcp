@@ -5,49 +5,54 @@ import matplotlib.pyplot as plt
 window_centers = np.array([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9])
 
 # Mandarin has too few samples in the first two windows, so start from 0.2-0.4 (center 0.3).
-mandarin_window_centers = window_centers[2:]
+mandarin_window_centers = window_centers[3:]
 
 # Dummy RMSE values per language and configuration
 # Mandarin: word relatedness features should help less due to different script/language family
 rmse = {
     "German": {
         "B":    np.array([0.99, 1.11, 1.16, 1.18, 1.21, 1.18, 1.12, 1.07, 1.06]),
-        "BE":   np.array([0.43, 0.41, 0.40, 0.41, 0.43, 0.45, 0.44, 0.43, 0.42]),
-        "BS":   np.array([0.43, 0.41, 0.39, 0.40, 0.42, 0.44, 0.43, 0.42, 0.41]),
-        "BR":   np.array([0.44, 0.41, 0.38, 0.36, 0.37, 0.41, 0.44, 0.43, 0.43]),
-        "BSR":  np.array([0.43, 0.40, 0.37, 0.34, 0.35, 0.39, 0.43, 0.42, 0.42]),
-        "BER":  np.array([0.42, 0.39, 0.36, 0.33, 0.34, 0.38, 0.42, 0.41, 0.41]),
-        "BESR": np.array([0.41, 0.38, 0.35, 0.31, 0.32, 0.36, 0.40, 0.40, 0.40]),
+        "BE":   np.array([0.97, 1.02, 1.07, 1.09, 1.11, 1.09, 1.03, 1.00, 0.99]),
+        "BS":   np.array([0.88, 1.01, 1.07, 1.12, 1.14, 1.12, 1.05, 1.01, 1.01]),
+        "BR":   np.array([0.93, 1.01, 1.05, 1.10, 1.13, 1.11, 1.04, 1.01, 1.02]),
+        "BES":  np.array([0.86, 0.99, 1.02, 1.08, 1.09, 1.08, 1.03, 0.99, 0.99]),
+        "BSR":  np.array([0.88, 1.00, 1.05, 1.10, 1.12, 1.10, 1.04, 1.00, 1.01]),
+        "BER":  np.array([0.95, 1.00, 1.05, 1.07, 1.10, 1.07, 1.02, 0.99, 0.99]),
+        "BESR": np.array([0.85, 0.96, 1.02, 1.06, 1.08, 1.07, 1.02, 0.99, 0.99]),
     },
     "Spanish": {
         "B":    np.array([1.06, 1.18, 1.22, 1.24, 1.22, 1.20, 1.17, 1.16, 1.15]),
-        "BE":   np.array([0.44, 0.42, 0.41, 0.42, 0.44, 0.46, 0.45, 0.44, 0.43]),
-        "BS":   np.array([0.44, 0.42, 0.40, 0.41, 0.43, 0.45, 0.44, 0.43, 0.42]),
-        "BR":   np.array([0.45, 0.42, 0.39, 0.36, 0.37, 0.41, 0.45, 0.44, 0.44]),
-        "BSR":  np.array([0.44, 0.41, 0.37, 0.34, 0.35, 0.39, 0.43, 0.43, 0.43]),
-        "BER":  np.array([0.43, 0.40, 0.36, 0.33, 0.34, 0.38, 0.42, 0.42, 0.42]),
-        "BESR": np.array([0.42, 0.39, 0.35, 0.31, 0.32, 0.36, 0.41, 0.41, 0.41]),
+        "BE":   np.array([1.19, 1.23, 1.17, 1.14, 1.12, 1.09, 1.07, 1.07, 1.07]),
+        "BS":   np.array([1.01, 1.08, 1.09, 1.10, 1.11, 1.11, 1.10, 1.09, 1.09]),
+        "BR":   np.array([1.15, 1.20, 1.16, 1.15, 1.14, 1.12, 1.09, 1.09, 1.09]),
+        "BES":  np.array([0.98, 1.05, 1.07, 1.08, 1.07, 1.08, 1.07, 1.07, 1.06]),
+        "BSR":  np.array([1.01, 1.06, 1.08, 1.08, 1.10, 1.09, 1.09, 1.09, 1.09]),
+        "BER":  np.array([1.16, 1.19, 1.15, 1.12, 1.10, 1.09, 1.07, 1.07, 1.07]),
+        "BESR": np.array([0.97, 1.02, 1.05, 1.06, 1.06, 1.06, 1.07, 1.06, 1.06]),
     },
     "Mandarin": {
-        "B":    np.array([0.00, 0.00, 0.78, 1.05, 0.99, 0.93, 0.97, 0.99, 0.99]),
-        "BE":   np.array([0.00, 0.00, 0.43, 0.45, 0.45, 0.46, 0.45, 0.44, 0.44]),
-        "BS":   np.array([0.00, 0.00, 0.44, 0.46, 0.46, 0.47, 0.46, 0.45, 0.45]),
-        "BR":   np.array([0.00, 0.00, 0.45, 0.46, 0.46, 0.47, 0.46, 0.45, 0.46]),
-        "BSR":  np.array([0.00, 0.00, 0.44, 0.45, 0.45, 0.46, 0.45, 0.44, 0.45]),
-        "BER":  np.array([0.00, 0.00, 0.42, 0.44, 0.44, 0.45, 0.44, 0.43, 0.44]),
-        "BESR": np.array([0.00, 0.00, 0.41, 0.43, 0.43, 0.44, 0.43, 0.42, 0.43]),
+        "B":    np.array([0.00, 0.00, 0.00, 1.05, 0.99, 0.93, 0.97, 0.99, 0.99]),
+        "BE":   np.array([0.00, 0.00, 0.00, 1.05, 0.93, 0.91, 0.92, 0.93, 0.91]),
+        "BS":   np.array([0.00, 0.00, 0.00, 1.12, 1.02, 0.95, 0.95, 0.95, 0.94]),
+        "BR":   np.array([0.00, 0.00, 0.00, 1.05, 0.95, 0.90, 0.93, 0.93, 0.92]),
+        "BES":  np.array([0.00, 0.00, 0.00, 1.05, 0.92, 0.92, 0.93, 0.93, 0.92]),
+        "BSR":  np.array([0.00, 0.00, 0.00, 1.09, 1.00, 0.93, 0.94, 0.94, 0.93]),
+        "BER":  np.array([0.00, 0.00, 0.00, 1.02, 0.88, 0.88, 0.91, 0.91, 0.90]),
+        "BESR": np.array([0.00, 0.00, 0.00, 0.99, 0.89, 0.90, 0.92, 0.92, 0.91]),
     },
 }
 
 # Colors for each configuration
 colors = {
     "B":    "black",
-    "BE":   "steelblue",
-    "BS":   "mediumseagreen",
-    "BR":   "darkorange",
-    "BSR":  "mediumpurple",
-    "BER":  "crimson",
-    "BESR": "saddlebrown",
+    "BE":   "dodgerblue",
+    "BS":   "gold",
+    "BR":   "red",
+    # Mixed tones for combined configurations
+    "BES":  "limegreen",
+    "BSR":  "darkorange",
+    "BER":  "darkviolet",
+    "BESR": "brown",
 }
 
 # Plot
@@ -56,7 +61,7 @@ fig, axes = plt.subplots(3, 1, figsize=(6, 12), sharex=True)
 for i, (ax, (language, configs)) in enumerate(zip(axes, rmse.items())):
     for config, values in configs.items():
         x_values = mandarin_window_centers if language == "Mandarin" else window_centers
-        y_values = values[2:] if language == "Mandarin" else values
+        y_values = values[3:] if language == "Mandarin" else values
         ax.plot(
             x_values,
             y_values,
@@ -71,13 +76,13 @@ for i, (ax, (language, configs)) in enumerate(zip(axes, rmse.items())):
     ax.grid(True, linestyle="--", alpha=0.5)
     ax.set_xticks(window_centers)
 
-    # Only show legend in first subplot
-    if i == 0:
+    # Only show legend in Mandarin subplot
+    if language == "Mandarin":
         ax.legend(
             fontsize=9,
             title="Configuration",
             title_fontsize=9,
-            loc="upper right"
+            loc="upper left"
         )
 
 # Shared x axis label

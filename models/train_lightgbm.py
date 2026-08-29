@@ -213,10 +213,14 @@ def make_feature_specs(feature_map: Dict[str, str], ablation_limit: int | None) 
 
     # Group-based configurations required in the project overview.
     for model_name, group_tuple in GROUP_CONFIGS.items():
-        selected = [ROBERTA_SCORE_COLUMN]
-        for group in group_tuple:
-            selected.extend(feature_map[c] for c in FEATURE_GROUPS[group])
-        selected = unique_preserve_order(selected)
+        if model_name == "group__established_relatedness_similarity":
+            # Keep exact feature ordering aligned with ablation__all_features.
+            selected = list(all_features_with_roberta)
+        else:
+            selected = [ROBERTA_SCORE_COLUMN]
+            for group in group_tuple:
+                selected.extend(feature_map[c] for c in FEATURE_GROUPS[group])
+            selected = unique_preserve_order(selected)
         specs.append(
             {
                 "model_name": model_name,
