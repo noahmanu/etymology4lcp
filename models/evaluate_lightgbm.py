@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Evaluate LightGBM CV predictions per model, L1, and optionally Levenshtein windows."""
+"""Evaluate LightGBM CV predictions per model, L1, and optionally original test subsets."""
 
 import argparse
 import json
@@ -14,8 +14,26 @@ from roberta_cv_utils import ID_COLUMN, rmse_pearson
 OUTER_FOLDS = [1, 2, 3, 4, 5]
 L1_COLUMN = "L1"
 LEVENSHTEIN_COLUMN = "char_edit_dist_norm"
+ORIGINAL_SPLIT_COLUMN = "original_split"
+ORIGINAL_TEST_SPLIT = "test"
 ROW_KEY_COLUMNS = [ID_COLUMN, L1_COLUMN]
 FEATURE_GROUP_MODEL_PREFIX = "group__"
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+MODELS_DIR = Path(__file__).resolve().parent
+FULL_DATASET_FILE = PROJECT_ROOT / "data" / "feature_enriched" / "full.csv"
+DEFAULT_PREDICTIONS_FILE = MODELS_DIR / "lightgbm_models" / "lightgbm_all_predictions.csv"
+DEFAULT_OUTPUT_JSON = MODELS_DIR / "lightgbm_models" / "lightgbm_metrics_summary.json"
+
+ORIGINAL_TEST_CONFIGS = {
+    "group__established_relatedness_similarity": {
+        "label": "BESR",
+        "languages": ["es", "de"],
+    },
+    "group__established_relatedness": {
+        "label": "BER",
+        "languages": ["cn"],
+    },
+}
 
 # Overlapping sliding windows: [0.0-0.2, 0.1-0.3, ..., 0.8-1.0]
 LEVENSHTEIN_WINDOWS: List[Tuple[float, float]] = [
@@ -27,8 +45,9 @@ MIN_WINDOW_ROWS = 50
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Evaluate LightGBM CV predictions.")
-    parser.add_argument("--predictions-file", type=Path, default=Path("./lightgbm_models/lightgbm_all_predictions.csv"))
-    parser.add_argument("--output-json", type=Path, default=Path("./lightgbm_models/lightgbm_metrics_summary.json"))
+    parser.add_argument("--predictions-file", type=Path, default=DEFAULT_PREDICTIONS_FILE)
+    parser.add_argument("--full-dataset-file", type=Path, default=FULL_DATASET_FILE)
+    parser.add_argument("--output-json", type=Path, default=DEFAULT_OUTPUT_JSON)
     return parser.parse_args()
 
 
@@ -54,6 +73,39 @@ def is_feature_group_model(model_name: str) -> bool:
     return str(model_name).startswith(FEATURE_GROUP_MODEL_PREFIX)
 
 
+def attach_original_split(pred_df: pd.DataFrame, full_dataset_file: Path) -> pd.DataFrame:
+    if ORIGINAL_SPLIT_COLUMN in pred_df.columns:
+        return pred_df
+
+    if not full_dataset_file.exists():
+        raise FileNotFoundError(
+            f"Missing full dataset file: {full_dataset_file}. Run data/feature_enriched/generate_full_dataset.py first."
+        )
+
+    full_df = pd.read_csv(full_dataset_file, usecols=ROW_KEY_COLUMNS + [ORIGINAL_SPLIT_COLUMN], keep_default_na=False)
+    duplicated_keys = int(full_df.duplicated(ROW_KEY_COLUMNS).to_numpy().sum())
+    if duplicated_keys:
+        raise ValueError(
+            f"Full dataset contains duplicate row keys in {full_dataset_file}: {duplicated_keys} duplicates"
+        )
+
+    merged = pred_df.merge(
+        full_df,
+        on=ROW_KEY_COLUMNS,
+        how="left",
+        validate="many_to_one",
+    )
+
+    original_split_series = merged[ORIGINAL_SPLIT_COLUMN]
+    if original_split_series.isna().any():
+        missing = int(np.count_nonzero(original_split_series.isna().to_numpy()))
+        raise ValueError(
+            f"Could not attach '{ORIGINAL_SPLIT_COLUMN}' to {missing} prediction rows from {full_dataset_file}"
+        )
+
+    return merged
+
+
 def metrics_for_window(df: pd.DataFrame, lo: float, hi: float) -> Optional[Dict]:
     if LEVENSHTEIN_COLUMN not in df.columns:
         return None
@@ -66,6 +118,30 @@ def metrics_for_window(df: pd.DataFrame, lo: float, hi: float) -> Optional[Dict]
     return {
         **metrics_from_df(sub),
         "n_rows": int(len(sub)),
+    }
+
+
+def original_test_metrics(model_name: str, model_df: pd.DataFrame) -> Optional[Dict[str, Any]]:
+    config = ORIGINAL_TEST_CONFIGS.get(model_name)
+    if config is None:
+        return None
+
+    if ORIGINAL_SPLIT_COLUMN not in model_df.columns:
+        raise ValueError(
+            f"Missing required column: {ORIGINAL_SPLIT_COLUMN}. Merge predictions with full.csv first."
+        )
+
+    subset = model_df[(model_df["split"] == "outer_test") & (model_df[ORIGINAL_SPLIT_COLUMN] == ORIGINAL_TEST_SPLIT)]
+    subset = subset[subset[L1_COLUMN].isin(config["languages"])]
+    if subset.empty:
+        return None
+
+    return {
+        "label": config["label"],
+        "model_name": model_name,
+        "original_split": ORIGINAL_TEST_SPLIT,
+        "languages": list(config["languages"]),
+        "per_l1": metrics_by_l1(subset, include_windows=False),
     }
 
 
@@ -144,6 +220,132 @@ def evaluate_model(model_name: str, model_df: pd.DataFrame) -> Dict:
     }
 
 
+def _fmt_metric(value: Any) -> str:
+    return "n/a" if value is None or pd.isna(value) else f"{float(value):.4f}"
+
+
+def build_console_summary(summary: Dict[str, Any]) -> pd.DataFrame:
+    rows: List[Dict[str, Any]] = []
+
+    for model_name, model_summary in summary["models"].items():
+        aggregate = cast(Dict[str, Any], model_summary.get("aggregate", {}))
+        outer_test = cast(Dict[str, Any], aggregate.get("outer_test", {}))
+
+        row: Dict[str, Any] = {
+            "model": model_name,
+            "outer_test_rmse": outer_test.get("rmse"),
+            "outer_test_pearson": outer_test.get("pearson"),
+            "outer_test_n": outer_test.get("n_rows"),
+        }
+
+        rows.append(row)
+
+    report_df = pd.DataFrame(rows)
+    if not report_df.empty:
+        report_df = report_df.sort_values("model").reset_index(drop=True)
+    return report_df
+
+
+def print_console_report(summary: Dict[str, Any]) -> None:
+    report_df = build_console_summary(summary)
+
+    print("\n=== LightGBM evaluation summary ===")
+    if report_df.empty:
+        print("No models found in the predictions file.")
+        return
+
+    display_df = report_df.assign(
+        outer_test_rmse=report_df["outer_test_rmse"].map(_fmt_metric),
+        outer_test_pearson=report_df["outer_test_pearson"].map(_fmt_metric),
+        outer_test_n=report_df["outer_test_n"].fillna(0).astype(int),
+    )
+
+    cols = ["model", "outer_test_rmse", "outer_test_pearson", "outer_test_n"]
+    print(display_df[cols].to_string(index=False))
+
+    print("\n=== BER / BESR language-subset results ===")
+    any_original = False
+    for model_name, model_summary in summary["models"].items():
+        original = cast(Optional[Dict[str, Any]], model_summary.get("original_shared_task_test"))
+        if original is None:
+            continue
+
+        any_original = True
+        for l1, l1_metrics in original.get("per_l1", {}).items():
+            print(
+                f"{original['label']} ({model_name}) L1={l1}: RMSE={_fmt_metric(l1_metrics.get('rmse'))}, "
+                f"Pearson={_fmt_metric(l1_metrics.get('pearson'))}, n={int(l1_metrics.get('n_rows', 0))}"
+            )
+
+    if not any_original:
+        print("No BESR/BER original-test subsets were found in the predictions.")
+
+    ablation_models = [
+        model_name
+        for model_name in summary["models"].keys()
+        if str(model_name).startswith("ablation__")
+    ]
+    print(
+        f"\n=== Leave-one-out ablation outer-test L1 subset results ({len(ablation_models)} models) ==="
+    )
+    any_ablation = False
+    for model_name in sorted(ablation_models):
+        model_summary = summary["models"][model_name]
+        aggregate = cast(Dict[str, Any], model_summary.get("aggregate", {}))
+        outer_test = cast(Dict[str, Any], aggregate.get("outer_test", {}))
+        per_l1 = cast(Dict[str, Dict[str, Any]], outer_test.get("per_l1", {}))
+
+        if not per_l1:
+            continue
+
+        any_ablation = True
+        print(model_name)
+        for l1, l1_metrics in per_l1.items():
+            print(
+                f"  L1={l1}: RMSE={_fmt_metric(l1_metrics.get('rmse'))}, "
+                f"Pearson={_fmt_metric(l1_metrics.get('pearson'))}, n={int(l1_metrics.get('n_rows', 0))}"
+            )
+
+    if not any_ablation:
+        print("No leave-one-out ablation models were found in the predictions file.")
+
+    print("\n=== Levenshtein window analysis by feature-group config ===")
+    any_windows = False
+    for model_name, model_summary in summary["models"].items():
+        aggregate = cast(Dict[str, Any], model_summary.get("aggregate", {}))
+        outer_test = cast(Dict[str, Any], aggregate.get("outer_test", {}))
+        per_l1 = cast(Dict[str, Dict[str, Any]], outer_test.get("per_l1", {}))
+
+        has_windows = False
+        for l1_metrics in per_l1.values():
+            if l1_metrics.get("levenshtein_windows"):
+                has_windows = True
+                break
+
+        if not has_windows:
+            continue
+
+        any_windows = True
+        print(model_name)
+        for l1, l1_metrics in per_l1.items():
+            windows = cast(Dict[str, Dict[str, Any]], l1_metrics.get("levenshtein_windows", {}))
+            if not windows:
+                continue
+
+            print(
+                f"  L1={l1}: RMSE={_fmt_metric(l1_metrics.get('rmse'))}, "
+                f"Pearson={_fmt_metric(l1_metrics.get('pearson'))}, n={int(l1_metrics.get('n_rows', 0))}"
+            )
+            for window_key, wm in windows.items():
+                print(
+                    f"    levenshtein [{window_key}]: RMSE={_fmt_metric(wm.get('rmse'))}, "
+                    f"Pearson={_fmt_metric(wm.get('pearson'))}, n={int(wm.get('n_rows', 0))}"
+                )
+
+    if not any_windows:
+        print("No Levenshtein window analysis was available in the current predictions file.")
+
+
 def main() -> None:
     args = parse_args()
 
@@ -152,7 +354,8 @@ def main() -> None:
             f"Missing prediction file: {args.predictions_file}. Run predict_lightgbm.py first."
         )
 
-    pred_df = pd.read_csv(args.predictions_file)
+    pred_df = pd.read_csv(args.predictions_file, keep_default_na=False)
+    pred_df = attach_original_split(pred_df, args.full_dataset_file)
 
     required_cols = {
         ID_COLUMN,
@@ -170,35 +373,21 @@ def main() -> None:
 
     summary = {
         "predictions_file": str(args.predictions_file),
+        "full_dataset_file": str(args.full_dataset_file),
         "models": {},
     }
 
     for model_name, model_df in pred_df.groupby("model_name", dropna=False):
         model_key = str(model_name)
-        summary["models"][model_key] = evaluate_model(model_key, model_df)
+        model_summary = evaluate_model(model_key, model_df)
 
-        outer_test_df = model_df[model_df["split"] == "outer_test"]
-        outer_test_metrics = metrics_from_df(outer_test_df)
-        print(
-            f"{model_key}: outer_test RMSE={outer_test_metrics['rmse']:.4f}, "
-            f"Pearson={outer_test_metrics['pearson']:.4f}, n={len(outer_test_df)}"
-        )
+        original_test_summary = original_test_metrics(model_key, model_df)
+        if original_test_summary is not None:
+            model_summary["original_shared_task_test"] = original_test_summary
 
-        if is_feature_group_model(model_key):
-            model_summary = cast(Dict[str, Any], summary["models"][model_key])
-            aggregate_summary = cast(Dict[str, Any], model_summary["aggregate"])
-            outer_test_summary = cast(Dict[str, Any], aggregate_summary.get("outer_test", {}))
-            for l1, l1_metrics in outer_test_summary.get("per_l1", {}).items():
-                print(
-                    f"  L1={l1}: RMSE={l1_metrics['rmse']:.4f}, "
-                    f"Pearson={l1_metrics['pearson']:.4f}, n={l1_metrics['n_rows']}"
-                )
-                for window_key, wm in l1_metrics.get("levenshtein_windows", {}).items():
-                    print(
-                        f"    levenshtein [{window_key}]: "
-                        f"RMSE={wm['rmse']:.4f}, Pearson={wm['pearson']:.4f}, n={wm['n_rows']}"
-                    )
+        summary["models"][model_key] = model_summary
 
+    print_console_report(summary)
     args.output_json.parent.mkdir(parents=True, exist_ok=True)
     args.output_json.write_text(json.dumps(summary, indent=2), encoding="utf-8")
     print(f"Saved LightGBM evaluation summary: {args.output_json}")

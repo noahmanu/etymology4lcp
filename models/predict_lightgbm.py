@@ -13,6 +13,7 @@ import pandas as pd
 from roberta_cv_utils import ID_COLUMN, LABEL_COLUMN, fold_dir
 
 OUTER_FOLDS = [1, 2, 3, 4, 5]
+BASELINE_MODEL = "ablation__roberta_only"
 ROW_KEY_COLUMNS = [ID_COLUMN, "L1"]
 ROBERTA_SCORE_COLUMN = "roberta_base_score"
 PREDICTION_METADATA_COLUMNS = ["L1", "en_target_word", "L1_source_word", "char_edit_dist_norm"]
@@ -67,6 +68,29 @@ def cast_model_columns(df: pd.DataFrame, feature_columns: List[str], categorical
     return x
 
 
+def build_prediction_frame(
+    merged_df: pd.DataFrame,
+    preds: np.ndarray,
+    outer_fold: int,
+    split_name: str,
+    model_name: str,
+) -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            ID_COLUMN: merged_df[ID_COLUMN].values,
+            "L1": merged_df["L1"].values,
+            "en_target_word": merged_df["en_target_word"].values,
+            "L1_source_word": merged_df["L1_source_word"].values,
+            "char_edit_dist_norm": merged_df["char_edit_dist_norm"].values,
+            "prediction": preds,
+            LABEL_COLUMN: merged_df[LABEL_COLUMN].values,
+            "outer_fold": outer_fold,
+            "split": split_name,
+            "model_name": model_name,
+        }
+    )
+
+
 def main() -> None:
     args = parse_args()
     manifest_path = args.models_dir / "training_manifest.json"
@@ -78,6 +102,25 @@ def main() -> None:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 
     pred_frames = []
+
+    # Baseline means raw RoBERTa predictions, without any LightGBM training.
+    folds_to_score = sorted({int(run["outer_fold"]) for run in manifest}) if manifest else OUTER_FOLDS
+    for outer_fold in folds_to_score:
+        outer_dir = fold_dir(args.folds_dir, outer_fold)
+        outer_pred_dir = args.roberta_predictions_dir / f"outer_fold_{outer_fold}"
+
+        split_inputs = [
+            ("outer_train_fit", outer_dir / "outer_train.csv", outer_pred_dir / "outer_train_oof_predictions.csv"),
+            ("outer_test", outer_dir / "outer_test.csv", outer_pred_dir / "outer_test_predictions.csv"),
+        ]
+
+        for split_name, csv_path, roberta_pred_path in split_inputs:
+            base_df = pd.read_csv(csv_path)
+            merged_df = merge_roberta_scores(base_df, roberta_pred_path)
+            roberta_preds = merged_df[ROBERTA_SCORE_COLUMN].to_numpy(dtype=float)
+            pred_frames.append(
+                build_prediction_frame(merged_df, roberta_preds, outer_fold, split_name, BASELINE_MODEL)
+            )
 
     for run in manifest:
         outer_fold = int(run["outer_fold"])
@@ -105,22 +148,7 @@ def main() -> None:
 
             x = cast_model_columns(merged_df, feature_columns, categorical_columns)
             preds = model.predict(x)
-
-            pred_df = pd.DataFrame(
-                {
-                    ID_COLUMN: merged_df[ID_COLUMN].values,
-                    "L1": merged_df["L1"].values,
-                    "en_target_word": merged_df["en_target_word"].values,
-                    "L1_source_word": merged_df["L1_source_word"].values,
-                    "char_edit_dist_norm": merged_df["char_edit_dist_norm"].values,
-                    "prediction": preds,
-                    LABEL_COLUMN: merged_df[LABEL_COLUMN].values,
-                    "outer_fold": outer_fold,
-                    "split": split_name,
-                    "model_name": model_name,
-                }
-            )
-            pred_frames.append(pred_df)
+            pred_frames.append(build_prediction_frame(merged_df, preds, outer_fold, split_name, model_name))
 
     if not pred_frames:
         raise RuntimeError("No predictions were generated.")
