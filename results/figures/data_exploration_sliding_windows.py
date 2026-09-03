@@ -1,113 +1,196 @@
-"""
-Data exploration script for analyzing Levenshtein-based feature distributions by language.
-Creates sliding window distributions and bar charts for each L1 language subset.
-"""
+"""Explore Levenshtein sliding-window feature distributions by language."""
 
-import pandas as pd
-import matplotlib.pyplot as plt
-import numpy as np
+import argparse
 from pathlib import Path
 
-# Read the data
-data_path = Path(__file__).parent.parent.parent / "data" / "pooled" / "pooled_preprocessed.csv"
-df = pd.read_csv(data_path)
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 
-print(f"Data shape: {df.shape}")
-print(f"Columns: {df.columns.tolist()}")
-print(f"L1 values: {df['L1'].unique()}")
-print(
-    f"levensht_geo_norm range: "
-    f"[{df['levensht_geo_norm'].min():.2f}, {df['levensht_geo_norm'].max():.2f}]"
-)
-print(f"levensht_norm range: [{df['levensht_norm'].min():.2f}, {df['levensht_norm'].max():.2f}]")
+WINDOW_WIDTH = 0.2
+WINDOW_STEP = 0.1
+START_MIN = 0.0
 
-# Create subsets by L1 language
-languages = sorted(df['L1'].unique())
-language_subsets = {lang: df[df['L1'] == lang] for lang in languages}
+FEATURE_ALIASES = {
+    "levensht_geo_norm": ["levensht_geo_norm", "char_edit_dist_geo_norm"],
+    "levensht_norm": ["levensht_norm", "char_edit_dist_norm"],
+}
 
-print(f"\nLanguage subsets:")
-for lang, subset in language_subsets.items():
-    print(f"  {lang}: {len(subset)} items")
-
-# Shared sliding-window settings
-window_width = 0.2
-window_step = 0.1
-start_min = 0.0
+DEFAULT_CENTER_RANGES = {
+    "de": "0.1-0.9",
+    "es": "0.1-0.9",
+    "cn": "0.1-0.9",
+}
 
 
-def get_window_config(end_max):
-    """Build sliding window centers/ranges for a given feature max value."""
-    window_centers = np.arange(start_min + window_width / 2, end_max, window_step)
-    window_ranges = [
-        (center - window_width / 2, center + window_width / 2) for center in window_centers
-    ]
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Plot language-wise sliding-window count distributions.")
+    parser.add_argument(
+        "--data-file",
+        type=Path,
+        default=Path(__file__).resolve().parents[2] / "data" / "pooled" / "pooled_preprocessed.csv",
+    )
+    parser.add_argument("--de-centers", type=str, default=DEFAULT_CENTER_RANGES["de"])
+    parser.add_argument("--es-centers", type=str, default=DEFAULT_CENTER_RANGES["es"])
+    parser.add_argument("--cn-centers", type=str, default=DEFAULT_CENTER_RANGES["cn"])
+    parser.add_argument("--no-show", action="store_true", help="Save figures without calling plt.show().")
+    return parser.parse_args()
+
+
+def parse_center_range(raw: str, label: str) -> tuple[float, float]:
+    parts = raw.strip().split("-")
+    if len(parts) != 2:
+        raise ValueError(f"Invalid {label} center range '{raw}'. Use low-high, e.g. 0.3-0.7")
+
+    low = float(parts[0])
+    high = float(parts[1])
+    if low > high:
+        raise ValueError(f"Invalid {label} center range '{raw}': low must be <= high")
+    return low, high
+
+
+def resolve_feature_column(df: pd.DataFrame, canonical_name: str) -> str:
+    aliases = FEATURE_ALIASES[canonical_name]
+    for alias in aliases:
+        if alias in df.columns:
+            return alias
+    raise ValueError(f"Could not resolve feature '{canonical_name}'. Tried aliases: {aliases}")
+
+
+def get_window_config(end_max: float) -> tuple[np.ndarray, list[tuple[float, float]]]:
+    window_centers = np.arange(START_MIN + WINDOW_WIDTH / 2, end_max, WINDOW_STEP)
+    window_ranges = [(center - WINDOW_WIDTH / 2, center + WINDOW_WIDTH / 2) for center in window_centers]
     return window_centers, window_ranges
 
-# Compute counts for each window and language
-def compute_window_counts(subset, feature_col, window_ranges):
-    """Count items falling into each window for the selected feature."""
+
+def compute_window_counts(subset: pd.DataFrame, feature_col: str, window_ranges: list[tuple[float, float]]) -> np.ndarray:
     counts = []
     for window_min, window_max in window_ranges:
-        count = len(
-            subset[
-                (subset[feature_col] >= window_min)
-                & (subset[feature_col] < window_max)
-            ]
-        )
+        count = len(subset[(subset[feature_col] >= window_min) & (subset[feature_col] < window_max)])
         counts.append(count)
-    return counts
+    return np.array(counts, dtype=int)
 
-def plot_feature_distributions(feature_col, output_filename, title_label, end_max):
-    """Create the language-wise sliding window plot for one Levenshtein feature."""
+
+def center_mask(centers: np.ndarray, low: float, high: float) -> np.ndarray:
+    return (centers >= low) & (centers <= high)
+
+
+def plot_feature_distributions(
+    df: pd.DataFrame,
+    feature_col: str,
+    output_filename: str,
+    title_label: str,
+    end_max: float,
+    range_by_language: dict[str, tuple[float, float]],
+    show_plot: bool,
+) -> None:
     window_centers, window_ranges = get_window_config(end_max)
 
     print(f"\nWindow configuration ({feature_col}):")
-    print(f"  Window width: {window_width}")
-    print(f"  Window step: {window_step}")
-    print(f"  Range: [{start_min:.1f}, {end_max:.1f}]")
+    print(f"  Window width: {WINDOW_WIDTH}")
+    print(f"  Window step: {WINDOW_STEP}")
+    print(f"  Range: [{START_MIN:.1f}, {end_max:.1f}]")
     print(f"  Number of windows: {len(window_centers)}")
     print(f"  Window centers: {window_centers}")
 
-    fig, axes = plt.subplots(1, len(languages), figsize=(15, 5))
+    languages = [str(v) for v in sorted(df["L1"].dropna().unique())]
+    language_subsets = {lang: df[df["L1"] == lang] for lang in languages}
+
+    fig, axes = plt.subplots(1, len(languages), figsize=(5 * len(languages), 5))
     if len(languages) == 1:
         axes = [axes]
 
     for idx, (lang, subset) in enumerate(sorted(language_subsets.items())):
         counts = compute_window_counts(subset, feature_col, window_ranges)
+        range_low, range_high = range_by_language.get(lang, (window_centers.min(), window_centers.max()))
+        mask = center_mask(window_centers, float(range_low), float(range_high))
+
+        selected_centers = window_centers[mask]
+        selected_counts = counts[mask]
+        if len(selected_centers) == 0:
+            raise ValueError(
+                f"No window centers in selected range for {lang}: {range_low}-{range_high}. "
+                f"Available centers: {window_centers.tolist()}"
+            )
 
         ax = axes[idx]
-        ax.bar(window_centers, counts, width=window_step * 0.8, edgecolor="black", alpha=0.7)
+        ax.bar(selected_centers, selected_counts, width=WINDOW_STEP * 0.8, edgecolor="black", alpha=0.7)
         ax.set_xlabel(f"{title_label} (window center)", fontsize=11)
         ax.set_ylabel("Count", fontsize=11)
         ax.set_title(f"Language: {lang} (n={len(subset)})", fontsize=12, fontweight="bold")
         ax.grid(axis="y", alpha=0.3)
-        ax.set_xlim(-0.05, end_max + 0.05)
+        ax.set_xticks(selected_centers)
+        ax.set_xticklabels([f"{c:.1f}" for c in selected_centers])
+        ax.set_xlim(float(selected_centers.min()) - 0.05, float(selected_centers.max()) + 0.05)
 
         print(f"\n{lang} distribution ({feature_col}):")
         print(f"  Total items: {len(subset)}")
         print(f"  {feature_col} mean: {subset[feature_col].mean():.4f}")
         print(f"  {feature_col} std: {subset[feature_col].std():.4f}")
-        print(f"  Window counts: {counts}")
+        print("  Window counts by center:")
+        for center, count in zip(selected_centers, selected_counts):
+            print(f"    center={float(center):.1f}: n={int(count)}")
 
     plt.tight_layout()
-    output_path = Path(__file__).parent / "results" / "figures" / output_filename
+    output_path = Path(__file__).resolve().parent / output_filename
     output_path.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(output_path, dpi=300, bbox_inches="tight")
-    print(f"\n✓ Figure saved to: {output_path}")
-    plt.show()
+    print(f"\nSaved figure to: {output_path}")
+
+    if show_plot:
+        plt.show()
 
 
-plot_feature_distributions(
-    "levensht_geo_norm",
-    "levensht_geo_norm_sliding_windows.png",
-    "Levensht geo Norm",
-    end_max=3.0,
-)
-plot_feature_distributions(
-    "levensht_norm",
-    "levensht_norm_sliding_windows.png",
-    "Levensht Norm",
-    end_max=1.0,
-)
+def main() -> None:
+    args = parse_args()
+    df = pd.read_csv(args.data_file)
+
+    print(f"Data shape: {df.shape}")
+    print(f"Columns: {df.columns.tolist()}")
+    print(f"L1 values: {df['L1'].unique()}")
+
+    required_cols = {"L1"}
+    missing_cols = required_cols.difference(df.columns)
+    if missing_cols:
+        raise ValueError(f"Missing required columns: {sorted(missing_cols)}")
+
+    geo_col = resolve_feature_column(df, "levensht_geo_norm")
+    norm_col = resolve_feature_column(df, "levensht_norm")
+
+    print(
+        f"{geo_col} range: "
+        f"[{df[geo_col].min():.2f}, {df[geo_col].max():.2f}]"
+    )
+    print(f"{norm_col} range: [{df[norm_col].min():.2f}, {df[norm_col].max():.2f}]")
+
+    range_by_language = {
+        "de": parse_center_range(args.de_centers, "German"),
+        "es": parse_center_range(args.es_centers, "Spanish"),
+        "cn": parse_center_range(args.cn_centers, "Mandarin"),
+    }
+
+    show_plot = not args.no_show
+    plot_feature_distributions(
+        df,
+        geo_col,
+        "levensht_geo_norm_sliding_windows.png",
+        "Levensht geo Norm",
+        end_max=3.0,
+        range_by_language=range_by_language,
+        show_plot=show_plot,
+    )
+    plot_feature_distributions(
+        df,
+        norm_col,
+        "levensht_norm_sliding_windows.png",
+        "Levensht Norm",
+        end_max=1.0,
+        range_by_language=range_by_language,
+        show_plot=show_plot,
+    )
+
+
+if __name__ == "__main__":
+    main()
 
 

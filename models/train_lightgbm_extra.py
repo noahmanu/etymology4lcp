@@ -44,6 +44,49 @@ FEATURE_ALIASES: Dict[str, List[str]] = {
     "transmission_path": ["transmission_path"],
 }
 
+FEATURE_GROUPS: Dict[str, List[str]] = {
+    "established": ["zipf_freq", "target_word_length", "num_syllables", "pos_tag"],
+    "similarity": [
+        "char_edit_dist",
+        "char_edit_dist_norm",
+        "char_edit_dist_geo_norm",
+        "phon_edit_dist",
+        "phon_edit_dist_norm",
+        "phon_edit_dist_geo_norm",
+        "jaro_distance",
+        "jaro_winkler_distance",
+        "soundex_dist",
+        "metaphone_dist_norm",
+        "char_cosine_sim",
+    ],
+    "relatedness": [
+        "lca_language",
+        "borrowed_from_source",
+        "borrowed_from_target",
+        "borrowed_from_third",
+        "english_word_origin",
+        "origin_matches_source_family",
+        "same_proto_word",
+        "same_proto_root",
+        "transmission_path",
+    ],
+}
+
+CONFIG_MODEL_SPECS: Dict[str, Dict[str, object]] = {
+    "extra__config__established_only": {
+        "config_label": "E",
+        "group_config": ["established"],
+    },
+    "extra__config__similarity_only": {
+        "config_label": "S",
+        "group_config": ["similarity"],
+    },
+    "extra__config__relatedness_only": {
+        "config_label": "R",
+        "group_config": ["relatedness"],
+    },
+}
+
 ALL_FEATURES = [
     "zipf_freq",
     "target_word_length",
@@ -190,14 +233,36 @@ def make_feature_specs(feature_map: Dict[str, str], feature_limit: int | None) -
 
     specs: List[Dict[str, Any]] = []
 
+    # Group-only configurations with no RoBERTa score (E/S/R).
+    for model_name, spec in CONFIG_MODEL_SPECS.items():
+        canonical_features = [
+            canonical
+            for group_name in spec["group_config"]
+            for canonical in FEATURE_GROUPS[str(group_name)]
+        ]
+        specs.append(
+            {
+                "model_name": model_name,
+                "feature_columns": [feature_map[c] for c in canonical_features],
+                "feature_canonical": canonical_features,
+                "added_feature_canonical": None,
+                "added_feature_column": None,
+                "config_label": spec["config_label"],
+                "group_config": spec["group_config"],
+            }
+        )
+
     for canonical in selected_features:
         actual_col = feature_map[canonical]
         specs.append(
             {
                 "model_name": f"extra__add__{canonical}",
                 "feature_columns": [ROBERTA_SCORE_COLUMN, actual_col],
+                "feature_canonical": [canonical],
                 "added_feature_canonical": canonical,
                 "added_feature_column": actual_col,
+                "config_label": None,
+                "group_config": None,
             }
         )
 
@@ -230,9 +295,10 @@ def main() -> None:
         for spec in specs:
             model_name = str(spec["model_name"])
             feature_columns = list(spec["feature_columns"])
-            categorical_columns = []
-            if spec["added_feature_canonical"] in CATEGORICAL_CANONICAL:
-                categorical_columns.append(str(spec["added_feature_column"]))
+            feature_canonical = [str(v) for v in list(spec["feature_canonical"])]
+            categorical_columns = [
+                feature_map[canonical] for canonical in feature_canonical if canonical in CATEGORICAL_CANONICAL
+            ]
 
             x_train = cast_model_columns(train_df, feature_columns, categorical_columns)
             y_train = train_df[LABEL_COLUMN].astype(float)
@@ -271,6 +337,8 @@ def main() -> None:
                 "categorical_columns": categorical_columns,
                 "added_feature_canonical": spec["added_feature_canonical"],
                 "added_feature_column": spec["added_feature_column"],
+                "config_label": spec["config_label"],
+                "group_config": spec["group_config"],
                 "n_rows_train": int(len(train_df)),
                 "n_rows_test": int(len(test_df)),
                 "train_metrics": train_metrics,

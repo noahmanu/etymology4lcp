@@ -137,9 +137,14 @@ def main() -> None:
             ("outer_test", outer_dir / "outer_test.csv", outer_pred_dir / "outer_test_predictions.csv"),
         ]
 
+        needs_roberta_merge = ROBERTA_SCORE_COLUMN in set(feature_columns)
+
         for split_name, csv_path, roberta_pred_path in split_inputs:
             base_df = pd.read_csv(csv_path)
-            merged_df = merge_roberta_scores(base_df, roberta_pred_path)
+            if needs_roberta_merge:
+                merged_df = merge_roberta_scores(base_df, roberta_pred_path)
+            else:
+                merged_df = base_df
 
             x = cast_model_columns(merged_df, feature_columns, categorical_columns)
             preds = model.predict(x)
