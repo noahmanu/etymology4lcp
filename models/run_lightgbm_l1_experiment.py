@@ -3,7 +3,7 @@
 
 This script trains, predicts, and evaluates both model families:
 - Standard family (`train_lightgbm.py` equivalent): group configs + leave-one-out ablations
-- Extra family (`train_lightgbm_extra.py` equivalent): E/S/R configs + single-feature additions
+- Extra family (`train_lightgbm_extra.py` equivalent): E/S/R/ES/ER/SR/ESR configs + single-feature additions
 
 Behavioral rule in this experiment:
 - Baseline model remains raw RoBERTa scores (no LightGBM training)
@@ -113,6 +113,22 @@ EXTRA_CONFIG_MODEL_SPECS: Dict[str, Dict[str, object]] = {
     "extra__config__relatedness_only": {
         "config_label": "R",
         "group_config": ["relatedness"],
+    },
+    "extra__config__established_similarity": {
+        "config_label": "ES",
+        "group_config": ["established", "similarity"],
+    },
+    "extra__config__established_relatedness": {
+        "config_label": "ER",
+        "group_config": ["established", "relatedness"],
+    },
+    "extra__config__similarity_relatedness": {
+        "config_label": "SR",
+        "group_config": ["similarity", "relatedness"],
+    },
+    "extra__config__established_similarity_relatedness": {
+        "config_label": "ESR",
+        "group_config": ["established", "similarity", "relatedness"],
     },
 }
 
@@ -370,6 +386,14 @@ def fit_and_save_model(
     args: argparse.Namespace,
     run_dir: Path,
 ) -> tuple[Dict[str, float], Dict[str, float], Path]:
+    n_estimators = int(args.n_estimators)
+    learning_rate = float(args.learning_rate)
+    num_leaves = int(args.num_leaves)
+    subsample = float(args.subsample)
+    colsample_bytree = float(args.colsample_bytree)
+    random_state = int(args.seed)
+    n_jobs = int(args.n_jobs)
+
     x_train = cast_model_columns(train_df, feature_columns, categorical_columns)
     y_train = train_df[LABEL_COLUMN].astype(float)
 
@@ -378,18 +402,18 @@ def fit_and_save_model(
 
     model = lgb.LGBMRegressor(
         objective="regression",
-        n_estimators=args.n_estimators,
-        learning_rate=args.learning_rate,
-        num_leaves=args.num_leaves,
-        subsample=args.subsample,
-        colsample_bytree=args.colsample_bytree,
-        random_state=args.seed,
-        n_jobs=args.n_jobs,
+        n_estimators=n_estimators,
+        learning_rate=learning_rate,
+        num_leaves=num_leaves,
+        subsample=subsample,
+        colsample_bytree=colsample_bytree,
+        random_state=random_state,
+        n_jobs=n_jobs,
     )
     model.fit(x_train, y_train, categorical_feature=categorical_columns)
 
-    train_preds = model.predict(x_train)
-    test_preds = model.predict(x_test)
+    train_preds = np.asarray(model.predict(x_train), dtype=float)
+    test_preds = np.asarray(model.predict(x_test), dtype=float)
 
     train_metrics = rmse_pearson(y_train.to_numpy(), train_preds)
     test_metrics = rmse_pearson(y_test.to_numpy(), test_preds)
@@ -404,13 +428,15 @@ def fit_and_save_model(
 def train_standard_models(args: argparse.Namespace, selected_outer_folds: List[int], standard_dir: Path) -> Path:
     standard_dir.mkdir(parents=True, exist_ok=True)
     training_manifest: List[Dict[str, Any]] = []
+    folds_dir = Path(args.folds_dir)
+    roberta_predictions_dir = Path(args.roberta_predictions_dir)
 
     for outer_fold in selected_outer_folds:
-        outer_dir = fold_dir(args.folds_dir, outer_fold)
+        outer_dir = fold_dir(folds_dir, outer_fold)
         outer_train_df = pd.read_csv(outer_dir / "outer_train.csv")
         outer_test_df = pd.read_csv(outer_dir / "outer_test.csv")
 
-        outer_pred_dir = args.roberta_predictions_dir / f"outer_fold_{outer_fold}"
+        outer_pred_dir = roberta_predictions_dir / f"outer_fold_{outer_fold}"
         train_pred_path = outer_pred_dir / "outer_train_oof_predictions.csv"
         test_pred_path = outer_pred_dir / "outer_test_predictions.csv"
 
@@ -474,13 +500,15 @@ def train_standard_models(args: argparse.Namespace, selected_outer_folds: List[i
 def train_extra_models(args: argparse.Namespace, selected_outer_folds: List[int], extra_dir: Path) -> Path:
     extra_dir.mkdir(parents=True, exist_ok=True)
     training_manifest: List[Dict[str, Any]] = []
+    folds_dir = Path(args.folds_dir)
+    roberta_predictions_dir = Path(args.roberta_predictions_dir)
 
     for outer_fold in selected_outer_folds:
-        outer_dir = fold_dir(args.folds_dir, outer_fold)
+        outer_dir = fold_dir(folds_dir, outer_fold)
         outer_train_df = pd.read_csv(outer_dir / "outer_train.csv")
         outer_test_df = pd.read_csv(outer_dir / "outer_test.csv")
 
-        outer_pred_dir = args.roberta_predictions_dir / f"outer_fold_{outer_fold}"
+        outer_pred_dir = roberta_predictions_dir / f"outer_fold_{outer_fold}"
         train_pred_path = outer_pred_dir / "outer_train_oof_predictions.csv"
         test_pred_path = outer_pred_dir / "outer_test_predictions.csv"
 
@@ -577,11 +605,13 @@ def predict_from_manifest(
 
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     pred_frames: List[pd.DataFrame] = []
+    folds_dir = Path(args.folds_dir)
+    roberta_predictions_dir = Path(args.roberta_predictions_dir)
 
     folds_to_score = sorted({int(run["outer_fold"]) for run in manifest}) if manifest else OUTER_FOLDS
     for outer_fold in folds_to_score:
-        outer_dir = fold_dir(args.folds_dir, outer_fold)
-        outer_pred_dir = args.roberta_predictions_dir / f"outer_fold_{outer_fold}"
+        outer_dir = fold_dir(folds_dir, outer_fold)
+        outer_pred_dir = roberta_predictions_dir / f"outer_fold_{outer_fold}"
 
         split_inputs = [
             ("outer_train_fit", outer_dir / "outer_train.csv", outer_pred_dir / "outer_train_oof_predictions.csv"),
@@ -608,8 +638,8 @@ def predict_from_manifest(
 
         model = joblib.load(model_path)
 
-        outer_dir = fold_dir(args.folds_dir, outer_fold)
-        outer_pred_dir = args.roberta_predictions_dir / f"outer_fold_{outer_fold}"
+        outer_dir = fold_dir(folds_dir, outer_fold)
+        outer_pred_dir = roberta_predictions_dir / f"outer_fold_{outer_fold}"
         split_inputs = [
             ("outer_train_fit", outer_dir / "outer_train.csv", outer_pred_dir / "outer_train_oof_predictions.csv"),
             ("outer_test", outer_dir / "outer_test.csv", outer_pred_dir / "outer_test_predictions.csv"),

@@ -28,7 +28,14 @@ CONFIG_MODEL_LABELS = {
     "extra__config__established_only": "E",
     "extra__config__similarity_only": "S",
     "extra__config__relatedness_only": "R",
+    "extra__config__established_similarity": "ES",
+    "extra__config__established_relatedness": "ER",
+    "extra__config__similarity_relatedness": "SR",
+    "extra__config__established_similarity_relatedness": "ESR",
 }
+
+PlotColor = str | tuple[float, float, float, float]
+PlotStyle = dict[str, str | float]
 
 RELATEDNESS_FEATURES = {
     "lca_language",
@@ -63,7 +70,7 @@ LINESTYLES = ["--", "-.", ":"]
 MARKERS = ["o", "s", "^", "D", "v", "P", "X", "*"]
 
 # Requested palette: repeated color families use distinct named shades.
-FEATURE_COLOR_MAP = {
+FEATURE_COLOR_MAP: dict[str, PlotColor] = {
     "lca_language": "deeppink",
     "borrowed_from_source": "forestgreen",
     "borrowed_from_target": "seagreen",
@@ -219,8 +226,8 @@ def main() -> None:
         )
 
     color_cycle = plt.get_cmap("tab20", len(model_specs))
-    colors: dict[str, tuple[float, float, float, float]] = {}
-    styles: dict[str, dict[str, object]] = {}
+    colors: dict[str, PlotColor] = {}
+    styles: dict[str, PlotStyle] = {}
     style_idx = 0
     for idx, (model_name, _) in enumerate(model_specs):
         if model_name == args.baseline_model:
@@ -238,11 +245,19 @@ def main() -> None:
                 "extra__config__established_only": "dimgray",
                 "extra__config__similarity_only": "slategray",
                 "extra__config__relatedness_only": "darkslategray",
+                "extra__config__established_similarity": "steelblue",
+                "extra__config__established_relatedness": "darkolivegreen",
+                "extra__config__similarity_relatedness": "rebeccapurple",
+                "extra__config__established_similarity_relatedness": "sienna",
             }
             config_style_map = {
                 "extra__config__established_only": {"linestyle": "-", "marker": "s"},
                 "extra__config__similarity_only": {"linestyle": "-", "marker": "^"},
                 "extra__config__relatedness_only": {"linestyle": "-", "marker": "D"},
+                "extra__config__established_similarity": {"linestyle": "--", "marker": "P"},
+                "extra__config__established_relatedness": {"linestyle": "--", "marker": "X"},
+                "extra__config__similarity_relatedness": {"linestyle": "--", "marker": "v"},
+                "extra__config__established_similarity_relatedness": {"linestyle": "-.", "marker": "*"},
             }
             colors[model_name] = config_color_map[model_name]
             styles[model_name] = {
