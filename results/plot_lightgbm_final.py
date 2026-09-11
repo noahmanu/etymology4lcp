@@ -59,68 +59,74 @@ DEFAULT_CENTER_RANGES = {
 
 SLIDING_GROUP_MODELS = [
     ("raw_roberta", "B"),
-    ("BE", "BE"),
+    ("BL1", "BL1"),
+    ("BE", "BC"),
     ("BS", "BS"),
-    ("BR", "BR"),
-    ("BES", "BES"),
-    ("BER", "BER"),
-    ("BSR", "BSR"),
-    ("BESR", "BESR"),
+    ("BR", "BE"),
+    ("BES", "BCS"),
+    ("BER", "BCE"),
+    ("BSR", "BSE"),
+    ("BESR", "BCSE"),
 ]
 
 SLIDING_GROUP_COLORS = {
     "B": "black",
-    "BE": "dodgerblue",
+    "BL1": "gray",
+    "BC": "dodgerblue",
     "BS": "gold",
-    "BR": "red",
-    "BES": "limegreen",
-    "BSR": "darkorange",
-    "BER": "darkviolet",
-    "BESR": "brown",
+    "BE": "red",
+    "BCS": "limegreen",
+    "BSE": "darkorange",
+    "BCE": "darkviolet",
+    "BCSE": "brown",
 }
 
 SLIDING_GROUP_STYLES = {
     "B": {"linestyle": "-", "marker": "o", "linewidth": 3.0, "alpha": 1.0},
-    "BE": {"linestyle": "--", "marker": "s", "linewidth": 4.5, "alpha": 0.60},
+    "BL1": {"linestyle": "-", "marker": "o", "linewidth": 3.0, "alpha": 0.9},
+    "BC": {"linestyle": "--", "marker": "s", "linewidth": 4.5, "alpha": 0.60},
     "BS": {"linestyle": "-.", "marker": "^", "linewidth": 4.5, "alpha": 0.60},
-    "BR": {"linestyle": ":", "marker": "D", "linewidth": 4.5, "alpha": 0.60},
-    "BES": {"linestyle": "--", "marker": "v", "linewidth": 4.5, "alpha": 0.60},
-    "BSR": {"linestyle": "-.", "marker": "P", "linewidth": 4.5, "alpha": 0.60},
-    "BER": {"linestyle": ":", "marker": "X", "linewidth": 4.5, "alpha": 0.60},
-    "BESR": {"linestyle": "-", "marker": "*", "linewidth": 4.5, "alpha": 0.60},
+    "BE": {"linestyle": ":", "marker": "D", "linewidth": 4.5, "alpha": 0.60},
+    "BCS": {"linestyle": "--", "marker": "v", "linewidth": 4.5, "alpha": 0.60},
+    "BSE": {"linestyle": "-.", "marker": "P", "linewidth": 4.5, "alpha": 0.60},
+    "BCE": {"linestyle": ":", "marker": "X", "linewidth": 4.5, "alpha": 0.60},
+    "BCSE": {"linestyle": "-", "marker": "*", "linewidth": 4.5, "alpha": 0.60},
 }
 
 L1_GROUP_MODELS = [
     ("raw_roberta", "B"),
-    ("E", "E"),
+    ("BL1", "BL1"),
+    ("E", "C"),
     ("S", "S"),
-    ("R", "R"),
-    ("ES", "ES"),
-    ("ER", "ER"),
-    ("SR", "SR"),
-    ("ESR", "ESR"),
+    ("R", "E"),
+    ("ES", "CS"),
+    ("ER", "CE"),
+    ("SR", "SE"),
+    ("ESR", "CSE"),
 ]
 
 L1_GROUP_COLORS = {
     "B": "black",
-    "E": "dodgerblue",
+    "BL1": "gray",
+    "C": "dodgerblue",
     "S": "gold",
-    "R": "red",
-    "ES": "limegreen",
-    "SR": "darkorange",
-    "ER": "darkviolet",
-    "ESR": "brown",
+    "E": "red",
+    "CS": "limegreen",
+    "SE": "darkorange",
+    "CE": "darkviolet",
+    "CSE": "brown",
 }
 
 L1_GROUP_STYLES = {
     "B": {"linestyle": "-", "marker": "o", "linewidth": 3.0, "alpha": 1.0},
-    "E": {"linestyle": "--", "marker": "s", "linewidth": 4.5, "alpha": 0.60},
+    "BL1": {"linestyle": "-", "marker": "o", "linewidth": 3.0, "alpha": 0.9},
+    "C": {"linestyle": "--", "marker": "s", "linewidth": 4.5, "alpha": 0.60},
     "S": {"linestyle": "-.", "marker": "^", "linewidth": 4.5, "alpha": 0.60},
-    "R": {"linestyle": ":", "marker": "D", "linewidth": 4.5, "alpha": 0.60},
-    "ES": {"linestyle": "--", "marker": "v", "linewidth": 4.5, "alpha": 0.60},
-    "SR": {"linestyle": "-.", "marker": "P", "linewidth": 4.5, "alpha": 0.60},
-    "ER": {"linestyle": ":", "marker": "X", "linewidth": 4.5, "alpha": 0.60},
-    "ESR": {"linestyle": "-", "marker": "*", "linewidth": 4.5, "alpha": 0.60},
+    "E": {"linestyle": ":", "marker": "D", "linewidth": 4.5, "alpha": 0.60},
+    "CS": {"linestyle": "--", "marker": "v", "linewidth": 4.5, "alpha": 0.60},
+    "SE": {"linestyle": "-.", "marker": "P", "linewidth": 4.5, "alpha": 0.60},
+    "CE": {"linestyle": ":", "marker": "X", "linewidth": 4.5, "alpha": 0.60},
+    "CSE": {"linestyle": "-", "marker": "*", "linewidth": 4.5, "alpha": 0.60},
 }
 
 RELATEDNESS_FEATURES = [
@@ -156,19 +162,19 @@ WINDOW_BAR_WIDTH = 0.075
 
 UPSET_MODEL_LABELS = {
     "raw_roberta": "B",
-    "E": "E",
+    "E": "C",
     "S": "S",
-    "R": "R",
+    "R": "E",
 }
 
 UPSET_SET_COLORS = {
     "B": "black",
-    "E": "tab:blue",
+    "C": "tab:blue",
     "S": "gold",
-    "R": "tab:red",
+    "E": "tab:red",
 }
 
-UPSET_LABEL_ORDER = ["B", "E", "S", "R"]
+UPSET_LABEL_ORDER = ["B", "C", "S", "E"]
 EPSILON = 1e-12
 
 
@@ -422,7 +428,10 @@ def plot_relatedness_individual_curves_with_window_sizes(
     range_by_language: Dict[str, tuple[float, float]],
     no_show: bool,
 ) -> None:
-    model_specs: List[Tuple[str, str, str]] = [("raw_roberta", "B", "black")]
+    model_specs: List[Tuple[str, str, str]] = [
+        ("raw_roberta", "B", "black"),
+        ("BL1", "BL1", "gray"),
+    ]
     for feature_name in RELATEDNESS_FEATURES:
         model_name = f"BL1_plus_{feature_name}"
         if model_name not in summary.get("models", {}):
@@ -452,8 +461,13 @@ def plot_relatedness_individual_curves_with_window_sizes(
             if reference_counts is None:
                 reference_counts = counts
 
-            if model_name == "raw_roberta":
-                style = {"linestyle": "-", "marker": "o", "linewidth": 3.0, "alpha": 1.0}
+            if model_name in {"raw_roberta", "BL1"}:
+                style = {
+                    "linestyle": "-",
+                    "marker": "o",
+                    "linewidth": 3.0,
+                    "alpha": 1.0 if model_name == "raw_roberta" else 0.9,
+                }
             else:
                 style = {
                     "linestyle": LINESTYLES[style_idx % len(LINESTYLES)],
@@ -708,13 +722,13 @@ def make_upset_figure(payload_by_language: Dict[str, Dict[str, Any]], k: float) 
         tau = float(payload.get("tau", np.nan))
         n_items = int(payload.get("n_items_considered", 0))
         subtitle = (
-            f"B/E/S/R | k={k:.3f} | tau={tau:.4f} | "
+            f"B/C/S/E | k={k:.3f} | tau={tau:.4f} | "
             f"n={n_items}"
         )
         draw_upset_panel(subfig, language_name, subtitle, payload, labels)
 
     if n > 1:
-        fig.suptitle("Correctness UpSet by Language (B/E/S/R)", fontsize=14, y=0.999, fontweight="bold")
+        fig.suptitle("Correctness UpSet by Language (B/C/S/E)", fontsize=14, y=0.999, fontweight="bold")
 
     return fig
 

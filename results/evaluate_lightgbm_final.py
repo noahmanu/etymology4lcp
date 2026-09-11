@@ -57,7 +57,8 @@ ORIGINAL_TEST_SPLIT = "test"
 
 BEST_MODEL_SPECS = {
     "BER_cn": {"model_name": "BER", "languages": ["cn"]},
-    "BESR_de_es": {"model_name": "BESR", "languages": ["de", "es"]},
+    "BESR_de": {"model_name": "BESR", "languages": ["de"]},
+    "BESR_es": {"model_name": "BESR", "languages": ["es"]},
 }
 
 
@@ -70,7 +71,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min-window-rows", type=int, default=MIN_WINDOW_ROWS)
     parser.add_argument(
         "--force-recompute",
-        action="store_true",
+        #action="store_true",
+        default=True,
         help="Recompute metrics even if --output-json already exists.",
     )
     return parser.parse_args()
@@ -266,15 +268,27 @@ def print_summary_tables(summary: Dict[str, Any]) -> None:
         "pearson",
         "n_rows",
         "de_rmse",
+        "de_pearson",
         "es_rmse",
+        "es_pearson",
         "cn_rmse",
+        "cn_pearson",
     ]
     for col in display_cols:
         if col not in leaderboard_df.columns:
             leaderboard_df[col] = np.nan
 
     printable = leaderboard_df.copy()
-    for col in ["rmse", "pearson", "de_rmse", "es_rmse", "cn_rmse"]:
+    for col in [
+        "rmse",
+        "pearson",
+        "de_rmse",
+        "de_pearson",
+        "es_rmse",
+        "es_pearson",
+        "cn_rmse",
+        "cn_pearson",
+    ]:
         printable[col] = printable[col].map(_fmt_metric)
     printable["n_rows"] = printable["n_rows"].fillna(0).astype(int)
 
@@ -312,8 +326,12 @@ def print_summary_tables(summary: Dict[str, Any]) -> None:
                 "n_rows": int(overall.get("n_rows", 0)),
             }
         )
-
-    print(pd.DataFrame(subset_rows).to_string(index=False))
+    subset_df = pd.DataFrame(subset_rows)
+    # Ensure both metrics are always visible in output, including cached/legacy payloads.
+    for col in ["rmse", "pearson"]:
+        if col not in subset_df.columns:
+            subset_df[col] = "n/a"
+    print(subset_df[["subset", "model", "languages", "rmse", "pearson", "n_rows"]].to_string(index=False))
 
 
 def compute_summary(args: argparse.Namespace) -> Dict[str, Any]:

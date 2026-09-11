@@ -176,6 +176,8 @@ def fit_one_model(
         num_leaves=args.num_leaves,
         subsample=args.subsample,
         colsample_bytree=args.colsample_bytree,
+        force_col_wise=True,
+        verbosity=-1,
         random_state=args.seed,
         n_jobs=args.n_jobs,
     )
@@ -218,6 +220,13 @@ def main() -> None:
             feature_tokens = [str(v) for v in spec["feature_tokens"]]
             feature_columns = resolve_feature_tokens(feature_tokens, feature_map)
             categorical_columns = categorical_columns_for_features(feature_columns, feature_map)
+
+            print(
+                f"Training outer_fold_{outer_fold} | model={model_name} | "
+                f"type={spec['model_type']} | groups={spec['groups']} | "
+                f"dropped_feature={spec['dropped_feature']}"
+            )
+            print(f"Included features ({len(feature_columns)}): {feature_columns}")
 
             model, train_metrics, test_metrics = fit_one_model(
                 train_df=train_df,
