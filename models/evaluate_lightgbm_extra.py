@@ -25,13 +25,13 @@ OUTER_TEST_SPLIT = "outer_test"
 BASELINE_MODEL = "extra__roberta_only"
 ADDED_PREFIX = "extra__add__"
 CONFIG_MODEL_LABELS = {
-    "extra__config__established_only": "E",
+    "extra__config__established_only": "C",
     "extra__config__similarity_only": "S",
-    "extra__config__relatedness_only": "R",
-    "extra__config__established_similarity": "ES",
-    "extra__config__established_relatedness": "ER",
-    "extra__config__similarity_relatedness": "SR",
-    "extra__config__established_similarity_relatedness": "ESR",
+    "extra__config__relatedness_only": "E",
+    "extra__config__established_similarity": "CS",
+    "extra__config__established_relatedness": "CE",
+    "extra__config__similarity_relatedness": "SE",
+    "extra__config__established_similarity_relatedness": "CSE",
 }
 
 PlotColor = str | tuple[float, float, float, float]

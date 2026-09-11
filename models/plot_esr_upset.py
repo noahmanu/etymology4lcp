@@ -53,17 +53,9 @@ MODEL_LABELS = {
 
 SET_COLORS = {
     "B": "black",
-    "E": "dodgerblue",
+    "E": "tab:blue",
     "S": "gold",
-    "R": "red",
-}
-
-# Requested fixed mixed tones.
-COMBO_COLORS = {
-    "ES": "limegreen",
-    "SR": "darkorange",
-    "ER": "darkviolet",
-    "ESR": "brown",
+    "R": "tab:red",
 }
 
 LABEL_ORDER = ["B", "E", "S", "R"]
@@ -101,6 +93,11 @@ def _blend_combo_color(active_labels: list[str]) -> str:
     return mcolors.to_hex(rgb_tuple)
 
 
+def ordered_model_labels(models: list[str]) -> list[str]:
+    present = {MODEL_LABELS[m] for m in models}
+    return [label for label in LABEL_ORDER if label in present]
+
+
 def combo_color(active_labels: list[str]) -> str:
     if not active_labels:
         return "lightgray"
@@ -108,11 +105,7 @@ def combo_color(active_labels: list[str]) -> str:
     if len(active_labels) == 1:
         return SET_COLORS[active_labels[0]]
 
-    key = _combo_key(active_labels)
-    if key in COMBO_COLORS:
-        return COMBO_COLORS[key]
-
-    # For combos not explicitly named (mostly those including B), use color blending.
+    # All multi-set intersections are blended from their active set colors.
     return _blend_combo_color(active_labels)
 
 
@@ -136,7 +129,7 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_OUTPUT_JSON,
         help="Output JSON path. '{k}' is supported; otherwise '_k<k>' is appended automatically.",
     )
-    parser.add_argument("--k", type=float, default=0.5, help="Scale factor in tau = k * std(GLMM_score).")
+    parser.add_argument("--k", type=float, default=0.50, help="Scale factor in tau = k * std(GLMM_score).")
     parser.add_argument(
         "--language",
         type=str,
@@ -226,10 +219,12 @@ def build_subset_error_frame(subset_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.
 
 def intersection_summary(correct_flags: pd.DataFrame, models: list[str], include_none: bool) -> list[dict[str, Any]]:
     grouped = correct_flags.groupby(models).size().rename("count").reset_index()
+    display_labels = ordered_model_labels(models)
 
     rows: list[dict[str, Any]] = []
     for _, rec in grouped.iterrows():
-        active = [MODEL_LABELS[m] for m in models if bool(rec[m])]
+        active_set = {MODEL_LABELS[m] for m in models if bool(rec[m])}
+        active = [label for label in display_labels if label in active_set]
         if not active and not include_none:
             continue
         rows.append(
@@ -288,7 +283,7 @@ def draw_upset_panel(
         x = np.arange(len(intersections))
         y = np.array([row["count"] for row in intersections], dtype=int)
         colors = [combo_color(row["active_labels"]) for row in intersections]
-        ax_inter.bar(x, y, color=colors, alpha=0.95)
+        ax_inter.bar(x, y, color=colors, alpha=0.65)
         ax_inter.set_ylabel("Count", fontsize=10)
         ax_inter.grid(axis="y", linestyle="--", alpha=0.35)
         ax_inter.set_xticks([])
@@ -297,7 +292,7 @@ def draw_upset_panel(
         for x_pos, y_val in zip(x, y):
             ax_inter.text(x_pos, y_val, str(int(y_val)), ha="center", va="bottom", fontsize=9)
 
-        model_labels = [MODEL_LABELS[m] for m in models]
+        model_labels = ordered_model_labels(models)
         y_positions = np.arange(len(model_labels))
         ax_matrix.set_yticks(y_positions)
         ax_matrix.set_yticklabels(model_labels, fontsize=10)
@@ -318,13 +313,14 @@ def draw_upset_panel(
         ax_matrix.set_xticklabels([row["active_key"] for row in intersections], rotation=55, ha="right", fontsize=9)
         ax_matrix.tick_params(axis="x", length=0)
         ax_matrix.set_ylim(-0.6, len(model_labels) - 0.4)
+        ax_matrix.invert_yaxis()
 
     set_sizes = payload["set_sizes"]
-    labels = [MODEL_LABELS[m] for m in models]
+    labels = ordered_model_labels(models)
     vals = [set_sizes[label] for label in labels]
     y = np.arange(len(labels))
     set_colors = [SET_COLORS[label] for label in labels]
-    ax_sets.barh(y, vals, color=set_colors, alpha=0.9)
+    ax_sets.barh(y, vals, color=set_colors, alpha=0.65)
     for y_pos, label, val in zip(y, labels, vals):
         text_color = "white" if label == "B" else "black"
         ax_sets.text(val / 2, y_pos, str(int(val)), va="center", ha="center", fontsize=9, color=text_color)
