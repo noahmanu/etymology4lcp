@@ -328,7 +328,7 @@ def plot_baseline_group_curves(
         ax.set_xlim(float(ticks.min()) - 0.02, float(ticks.max()) + 0.02)
 
         if language_code == "cn":
-            ax.legend(fontsize=12, title="Configuration", title_fontsize=14, loc="lower right")
+            ax.legend(fontsize=10, title="Configuration", title_fontsize=12, loc="lower right")
 
     axes[-1].set_xlabel("Normalized Levenshtein Distance (Window Center)", fontsize=14)
     fig.suptitle("BL1 Group Models by Levenshtein Window", fontsize=13, y=0.99, fontweight="bold")
@@ -409,10 +409,10 @@ def plot_l1_group_curves_with_glmm(
             ax.legend(
                 handles_1 + handles_2,
                 labels_1 + labels_2,
-                fontsize=11,
-                title="Series",
-                title_fontsize=13,
-                loc="lower right",
+                fontsize=10,
+                title="Components",
+                title_fontsize=12,
+                loc="upper right",
             )
 
     axes[-1].set_xlabel("Normalized Levenshtein Distance (Window Center)", fontsize=14)
@@ -517,7 +517,7 @@ def plot_relatedness_individual_curves_with_window_sizes(
                 handles_1 + handles_2,
                 labels_1 + labels_2,
                 fontsize=10,
-                title="Series",
+                title="Configuration",
                 title_fontsize=12,
                 loc="lower right",
             )
