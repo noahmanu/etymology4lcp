@@ -34,6 +34,9 @@ from lightgbm_cv_utils import (
 
 
 BASELINE_L1_MODEL = "BL1"
+BASELINE_RELATEDNESS_NO_L1_MODEL = "BR_no_L1"
+L1_ONLY_MODEL = "L1_only"
+RELATEDNESS_ONLY_MODEL = "R_only"
 
 BL1_GROUP_CONFIGS = {
     "BE": ["established"],
@@ -104,6 +107,36 @@ def build_model_specs() -> List[Dict[str, Any]]:
         }
     )
 
+    specs.append(
+        {
+            "model_name": BASELINE_RELATEDNESS_NO_L1_MODEL,
+            "model_type": "baseline_relatedness_no_l1",
+            "feature_tokens": [ROBERTA_SCORE_COLUMN] + FEATURE_GROUPS["relatedness"],
+            "groups": ["relatedness"],
+            "dropped_feature": None,
+        }
+    )
+
+    specs.append(
+        {
+            "model_name": L1_ONLY_MODEL,
+            "model_type": "l1_only",
+            "feature_tokens": [L1_COLUMN],
+            "groups": [],
+            "dropped_feature": None,
+        }
+    )
+
+    specs.append(
+        {
+            "model_name": RELATEDNESS_ONLY_MODEL,
+            "model_type": "relatedness_only",
+            "feature_tokens": FEATURE_GROUPS["relatedness"],
+            "groups": ["relatedness"],
+            "dropped_feature": None,
+        }
+    )
+
     for canonical_feature in ALL_CANONICAL_FEATURES:
         specs.append(
             {
@@ -149,7 +182,7 @@ def build_model_specs() -> List[Dict[str, Any]]:
             }
         )
 
-    expected_models = 1 + len(ALL_CANONICAL_FEATURES) + 7 + 7 + len(ALL_CANONICAL_FEATURES)
+    expected_models = 4 + len(ALL_CANONICAL_FEATURES) + 7 + 7 + len(ALL_CANONICAL_FEATURES)
     if len(specs) != expected_models:
         raise RuntimeError(f"Unexpected number of model specs: {len(specs)} != {expected_models}")
 

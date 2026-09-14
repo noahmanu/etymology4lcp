@@ -135,15 +135,34 @@ def build_feature_map(df: pd.DataFrame) -> Dict[str, str]:
 
 
 def resolve_feature_tokens(feature_tokens: Iterable[str], feature_map: Dict[str, str]) -> List[str]:
+    canonical_order = {name: idx for idx, name in enumerate(ALL_CANONICAL_FEATURES)}
+    actual_to_canonical = {actual: canonical for canonical, actual in feature_map.items()}
     out: List[str] = []
     for token in feature_tokens:
         if token in (ROBERTA_SCORE_COLUMN, L1_COLUMN):
             out.append(token)
         else:
-            if token not in feature_map:
+            if token in feature_map:
+                out.append(feature_map[token])
+            elif token in actual_to_canonical:
+                out.append(token)
+            else:
                 raise ValueError(f"Unknown feature token '{token}'.")
-            out.append(feature_map[token])
-    return [str(v) for v in unique_preserve_order(out)]
+
+    unique_features = [str(v) for v in unique_preserve_order(out)]
+
+    def sort_key(col: str) -> tuple[int, int, str]:
+        if col == ROBERTA_SCORE_COLUMN:
+            return (0, 0, col)
+        if col == L1_COLUMN:
+            return (0, 1, col)
+
+        canonical = actual_to_canonical.get(col)
+        if canonical is None:
+            return (2, 10_000, col)
+        return (1, canonical_order[canonical], col)
+
+    return sorted(unique_features, key=sort_key)
 
 
 def merge_roberta_scores(base_df: pd.DataFrame, roberta_pred_path: Path) -> pd.DataFrame:

@@ -63,6 +63,7 @@ SLIDING_GROUP_MODELS = [
     ("BE", "BC"),
     ("BS", "BS"),
     ("BR", "BE"),
+    ("BR_no_L1", "BE0"),
     ("BES", "BCS"),
     ("BER", "BCE"),
     ("BSR", "BSE"),
@@ -75,6 +76,7 @@ SLIDING_GROUP_COLORS = {
     "BC": "dodgerblue",
     "BS": "gold",
     "BE": "red",
+    "BE0": "firebrick",
     "BCS": "limegreen",
     "BSE": "darkorange",
     "BCE": "darkviolet",
@@ -87,6 +89,7 @@ SLIDING_GROUP_STYLES = {
     "BC": {"linestyle": "--", "marker": "s", "linewidth": 4.5, "alpha": 0.60},
     "BS": {"linestyle": "-.", "marker": "^", "linewidth": 4.5, "alpha": 0.60},
     "BE": {"linestyle": ":", "marker": "D", "linewidth": 4.5, "alpha": 0.60},
+    "BE0": {"linestyle": ":", "marker": "h", "linewidth": 4.5, "alpha": 0.80},
     "BCS": {"linestyle": "--", "marker": "v", "linewidth": 4.5, "alpha": 0.60},
     "BSE": {"linestyle": "-.", "marker": "P", "linewidth": 4.5, "alpha": 0.60},
     "BCE": {"linestyle": ":", "marker": "X", "linewidth": 4.5, "alpha": 0.60},
@@ -95,7 +98,8 @@ SLIDING_GROUP_STYLES = {
 
 L1_GROUP_MODELS = [
     ("raw_roberta", "B"),
-    ("BL1", "BL1"),
+    ("L1_only", "L1"),
+    ("R_only", "E0"),
     ("E", "C"),
     ("S", "S"),
     ("R", "E"),
@@ -107,7 +111,8 @@ L1_GROUP_MODELS = [
 
 L1_GROUP_COLORS = {
     "B": "black",
-    "BL1": "gray",
+    "L1": "gray",
+    "E0": "firebrick",
     "C": "dodgerblue",
     "S": "gold",
     "E": "red",
@@ -119,7 +124,8 @@ L1_GROUP_COLORS = {
 
 L1_GROUP_STYLES = {
     "B": {"linestyle": "-", "marker": "o", "linewidth": 3.0, "alpha": 1.0},
-    "BL1": {"linestyle": "-", "marker": "o", "linewidth": 3.0, "alpha": 0.9},
+    "L1": {"linestyle": "-", "marker": "o", "linewidth": 3.0, "alpha": 0.9},
+    "E0": {"linestyle": ":", "marker": "h", "linewidth": 4.5, "alpha": 0.80},
     "C": {"linestyle": "--", "marker": "s", "linewidth": 4.5, "alpha": 0.60},
     "S": {"linestyle": "-.", "marker": "^", "linewidth": 4.5, "alpha": 0.60},
     "E": {"linestyle": ":", "marker": "D", "linewidth": 4.5, "alpha": 0.60},
@@ -161,20 +167,20 @@ WINDOW_BAR_ALPHA = 0.1
 WINDOW_BAR_WIDTH = 0.075
 
 UPSET_MODEL_LABELS = {
-    "raw_roberta": "B",
+    "BL1": "BL1",
     "E": "C",
     "S": "S",
     "R": "E",
 }
 
 UPSET_SET_COLORS = {
-    "B": "black",
-    "C": "tab:blue",
+    "BL1": "gray",
+    "C": "dodgerblue",
     "S": "gold",
-    "E": "tab:red",
+    "E": "red",
 }
 
-UPSET_LABEL_ORDER = ["B", "C", "S", "E"]
+UPSET_LABEL_ORDER = ["BL1", "C", "S", "E"]
 EPSILON = 1e-12
 
 
@@ -686,7 +692,7 @@ def draw_upset_panel(
 
     ax_sets.barh(y, vals, color=set_colors, alpha=0.65)
     for y_pos, label, val in zip(y, labels, vals):
-        text_color = "white" if label == "B" else "black"
+        text_color = "black"
         ax_sets.text(val / 2 if val > 0 else 0.5, y_pos, str(int(val)), va="center", ha="center", fontsize=9, color=text_color)
 
     ax_sets.set_yticks(y)
@@ -722,13 +728,13 @@ def make_upset_figure(payload_by_language: Dict[str, Dict[str, Any]], k: float) 
         tau = float(payload.get("tau", np.nan))
         n_items = int(payload.get("n_items_considered", 0))
         subtitle = (
-            f"B/C/S/E | k={k:.3f} | tau={tau:.4f} | "
+            f"BL1/C/S/E | k={k:.3f} | tau={tau:.4f} | "
             f"n={n_items}"
         )
         draw_upset_panel(subfig, language_name, subtitle, payload, labels)
 
     if n > 1:
-        fig.suptitle("Correctness UpSet by Language (B/C/S/E)", fontsize=14, y=0.999, fontweight="bold")
+        fig.suptitle("Correctness UpSet by Language (BL1/C/S/E)", fontsize=14, y=0.999, fontweight="bold")
 
     return fig
 
@@ -739,7 +745,7 @@ def plot_upset_thresholds(summary: Dict[str, Any], output_dir: Path, no_show: bo
     missing_models = [name for name in UPSET_MODEL_LABELS if name not in set(predictions_df[MODEL_COLUMN].astype(str).unique())]
     if missing_models:
         raise ValueError(
-            "Predictions file does not contain all required UpSet models (raw_roberta/E/S/R): "
+            "Predictions file does not contain all required UpSet models (BL1/E/S/R): "
             f"{missing_models}"
         )
 
@@ -749,10 +755,9 @@ def plot_upset_thresholds(summary: Dict[str, Any], output_dir: Path, no_show: bo
     for k in [0.05, 0.5]:
         payload_by_language: Dict[str, Dict[str, Any]] = {}
         for language_code, _language_name in LANGUAGE_SPECS:
-            subset_mask = (predictions_df[L1_COLUMN] == language_code) & (
-                predictions_df[MODEL_COLUMN].isin(model_names)
-            )
-            subset_df = pd.DataFrame(predictions_df.loc[subset_mask]).copy()
+            language_mask = predictions_df[L1_COLUMN].eq(language_code)
+            model_mask = predictions_df[MODEL_COLUMN].isin(model_names)
+            subset_df = predictions_df.loc[language_mask & model_mask].copy()
             if subset_df.empty:
                 continue
             payload_by_language[language_code] = analyze_upset_language(subset_df, model_to_label, k)
