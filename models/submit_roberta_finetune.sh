@@ -4,7 +4,7 @@
 set -euo pipefail
 
 JOB_PREFIX="roberta_cv"
-TIME_LIMIT="00:20:00"
+TIME_LIMIT="00:30:00"
 MEMORY="24G"
 CPUS_PER_TASK=4
 PARTITION="gpu"

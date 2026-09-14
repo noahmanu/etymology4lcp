@@ -29,13 +29,26 @@ OUTER_TEST_SPLIT = "outer_test"
 ROBERTA_SCORE_COLUMN = "roberta_base_score"
 CHAR_EDIT_RANGE_LOW = 0.6
 CHAR_EDIT_RANGE_HIGH = 1.0
-HOLM_EXCLUDED_BASE_MODELS = {"B"}
+HOLM_FAMILY_B_VS_BR_NO_L1 = "B_vs_BR_no_L1"
+HOLM_FAMILY_B_PLUS_L1 = "B_plus_L1_vs_R"
+HOLM_FAMILY_NO_B = "L1ESES_vs_R"
+
+HOLM_FAMILIES_BY_COMPARISON: Dict[Tuple[str, str], str] = {
+    ("B", "BR_no_L1"): HOLM_FAMILY_B_VS_BR_NO_L1,
+    ("BL1", "BR"): HOLM_FAMILY_B_PLUS_L1,
+    ("BE", "BER"): HOLM_FAMILY_B_PLUS_L1,
+    ("BS", "BSR"): HOLM_FAMILY_B_PLUS_L1,
+    ("BES", "BESR"): HOLM_FAMILY_B_PLUS_L1,
+    ("L1_only", "R"): HOLM_FAMILY_NO_B,
+    ("E", "ER"): HOLM_FAMILY_NO_B,
+    ("S", "SR"): HOLM_FAMILY_NO_B,
+    ("ES", "ESR"): HOLM_FAMILY_NO_B,
+}
 
 # Pairwise comparisons evaluated with paired permutation/bootstrap tests.
 COMPARISONS: List[Tuple[str, str]] = [
-    ("B", "BR"),
     ("B", "BR_no_L1"),
-    ("L1_only", "E"),
+    ("L1_only", "R"),
     ("BL1", "BR"),
     ("E", "ER"),
     ("S", "SR"),
@@ -336,28 +349,41 @@ def _compute_one_test(
 
 
 def _apply_multiple_testing_corrections(tests: List[Dict[str, Any]], alpha: float) -> None:
-    valid_indices = [i for i, row in enumerate(tests) if row["status"] == "ok" and row["p_value_one_sided"] is not None]
-    holm_indices = [i for i in valid_indices if str(tests[i].get("base_model")) not in HOLM_EXCLUDED_BASE_MODELS]
-    raw_p = [float(tests[i]["p_value_one_sided"]) for i in holm_indices]
+    # Initialize defaults for every test row.
+    for row in tests:
+        row["holm_family"] = None
+        row["holm_eligible"] = False
+        row["correction_scope"] = "raw_only"
+        row["p_value_one_sided_holm"] = None
+        row["p_value_one_sided_bh"] = None
 
-    holm = _holm_adjust(raw_p) if raw_p else []
-    bh = _bh_adjust(raw_p) if raw_p else []
-
-    for pos, idx in enumerate(holm_indices):
-        tests[idx]["p_value_one_sided_holm"] = holm[pos]
-        tests[idx]["p_value_one_sided_bh"] = bh[pos]
-
-    valid_index_set = set(valid_indices)
-    holm_index_set = set(holm_indices)
+    # Group valid tests by the requested family-specific correction sets.
+    family_to_indices: Dict[str, List[int]] = {}
+    valid_index_set: set[int] = set()
     for i, row in enumerate(tests):
-        base_model = str(row.get("base_model"))
-        holm_eligible = base_model not in HOLM_EXCLUDED_BASE_MODELS
-        row["holm_eligible"] = bool(holm_eligible)
-        row["correction_scope"] = "holm_over_non_B" if holm_eligible else "raw_only"
+        if row["status"] != "ok" or row["p_value_one_sided"] is None:
+            continue
+        valid_index_set.add(i)
+        key = (str(row.get("base_model")), str(row.get("with_r_model")))
+        family = HOLM_FAMILIES_BY_COMPARISON.get(key)
+        if family is None:
+            continue
+        row["holm_family"] = family
+        row["holm_eligible"] = True
+        row["correction_scope"] = f"holm_within_{family}"
+        family_to_indices.setdefault(family, []).append(i)
 
-        if i not in holm_index_set:
-            row["p_value_one_sided_holm"] = None
-            row["p_value_one_sided_bh"] = None
+    # Apply Holm and BH/FDR within each family independently.
+    for family, family_indices in family_to_indices.items():
+        raw_p = [float(tests[i]["p_value_one_sided"]) for i in family_indices]
+        holm = _holm_adjust(raw_p) if raw_p else []
+        bh = _bh_adjust(raw_p) if raw_p else []
+        for pos, idx in enumerate(family_indices):
+            tests[idx]["p_value_one_sided_holm"] = holm[pos]
+            tests[idx]["p_value_one_sided_bh"] = bh[pos]
+
+    holm_index_set = {i for indices in family_to_indices.values() for i in indices}
+    for i, row in enumerate(tests):
         row["significant_holm"] = bool(
             i in holm_index_set
             and row["status"] == "ok"
@@ -446,15 +472,43 @@ def compute_significance(args: argparse.Namespace) -> Dict[str, Any]:
         "n_permutations": int(args.n_permutations),
         "n_bootstrap": int(args.n_bootstrap),
         "alpha": float(args.alpha),
-        "correction": "holm over non-B contrasts only (primary), bh/fdr over non-B contrasts only (secondary)",
-        "holm_excluded_base_models": sorted(HOLM_EXCLUDED_BASE_MODELS),
+        "correction": "holm/bh are applied independently within predefined comparison families",
+        "holm_families": {
+            HOLM_FAMILY_B_VS_BR_NO_L1: [{"base": "B", "with_r": "BR_no_L1"}],
+            HOLM_FAMILY_B_PLUS_L1: [
+                {"base": "BL1", "with_r": "BR"},
+                {"base": "BE", "with_r": "BER"},
+                {"base": "BS", "with_r": "BSR"},
+                {"base": "BES", "with_r": "BESR"},
+            ],
+            HOLM_FAMILY_NO_B: [
+                {"base": "L1_only", "with_r": "R"},
+                {"base": "E", "with_r": "ER"},
+                {"base": "S", "with_r": "SR"},
+                {"base": "ES", "with_r": "ESR"},
+            ],
+        },
         "comparisons": [{"base": a, "with_r": b} for a, b in COMPARISONS],
         "subsets": [{"name": name, "language": language} for name, language in SUBSETS],
         "tests": tests,
         "char_edit_dist_norm_range_experiment": {
             "range": [CHAR_EDIT_RANGE_LOW, CHAR_EDIT_RANGE_HIGH],
-            "correction": "holm over non-B contrasts only (primary), bh/fdr over non-B contrasts only (secondary); computed independently from the full-data experiment",
-            "holm_excluded_base_models": sorted(HOLM_EXCLUDED_BASE_MODELS),
+            "correction": "holm/bh are applied independently within predefined comparison families; computed independently from the full-data experiment",
+            "holm_families": {
+                HOLM_FAMILY_B_VS_BR_NO_L1: [{"base": "B", "with_r": "BR_no_L1"}],
+                HOLM_FAMILY_B_PLUS_L1: [
+                    {"base": "BL1", "with_r": "BR"},
+                    {"base": "BE", "with_r": "BER"},
+                    {"base": "BS", "with_r": "BSR"},
+                    {"base": "BES", "with_r": "BESR"},
+                ],
+                HOLM_FAMILY_NO_B: [
+                    {"base": "L1_only", "with_r": "R"},
+                    {"base": "E", "with_r": "ER"},
+                    {"base": "S", "with_r": "SR"},
+                    {"base": "ES", "with_r": "ESR"},
+                ],
+            },
             "tests": range_tests,
         },
     }

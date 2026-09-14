@@ -125,7 +125,7 @@ L1_GROUP_COLORS = {
 L1_GROUP_STYLES = {
     "B": {"linestyle": "-", "marker": "o", "linewidth": 3.0, "alpha": 1.0},
     "L1": {"linestyle": "-", "marker": "o", "linewidth": 3.0, "alpha": 0.9},
-    "E0": {"linestyle": ":", "marker": "h", "linewidth": 4.5, "alpha": 0.80},
+    "E0": {"linestyle": ":", "marker": "h", "linewidth": 4.5, "alpha": 0.60},
     "C": {"linestyle": "--", "marker": "s", "linewidth": 4.5, "alpha": 0.60},
     "S": {"linestyle": "-.", "marker": "^", "linewidth": 4.5, "alpha": 0.60},
     "E": {"linestyle": ":", "marker": "D", "linewidth": 4.5, "alpha": 0.60},
