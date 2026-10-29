@@ -1083,13 +1083,16 @@ def draw_upset_panel(
                     zorder=3,
                 )
 
-        ax_matrix.set_xticks(x)
-        ax_matrix.set_xticklabels(
-            [row["active_key"] for row in intersections],
-            rotation=55,
-            ha="right",
-            fontsize=7,
-        )
+        # ax_matrix.set_xticks(x)
+        # ax_matrix.set_xticklabels(
+        #     [row["active_key"] for row in intersections],
+        #     rotation=55,
+        #     ha="right",
+        #     fontsize=7,
+        # )
+        # Hide intersection labels to keep more vertical space for the bars/matrix.
+        ax_matrix.set_xticks([])
+        ax_matrix.tick_params(axis="x", which="both", bottom=False, labelbottom=False)
         ax_matrix.tick_params(axis="x", length=0)
         ax_matrix.set_ylim(-0.6, len(labels) - 0.4)
         ax_matrix.invert_yaxis()
@@ -1121,7 +1124,7 @@ def draw_upset_panel(
     ax_sets.set_xlabel("Set size", fontsize=10)
     ax_sets.grid(axis="x", linestyle="--", alpha=0.35)
 
-    subfig.suptitle(language_name, fontsize=13, y=0.96)
+    subfig.suptitle(language_name, fontsize=11, y=0.97)
     subfig.text(0.5, 0.91, subtitle, ha="center", va="center", fontsize=10)
 
 
@@ -1138,10 +1141,10 @@ def make_upset_figure(
         raise ValueError("No language payload available for UpSet plot.")
 
     if n == 1:
-        fig = plt.figure(figsize=(10, 6.8))
+        fig = plt.figure(figsize=(10, 6.8)) ## change size here
         subfigs = [fig]
     else:
-        fig = plt.figure(figsize=(10, 7 * n))
+        fig = plt.figure(figsize=(10, 7 * n)) ## change size here
         subfigs = fig.subfigures(nrows=n, ncols=1)
 
         if not isinstance(subfigs, np.ndarray):
@@ -1167,6 +1170,72 @@ def make_upset_figure(
             fontweight="bold",
         )
 
+    return fig
+
+
+def make_combined_upset_figure(
+    payloads_by_k: Dict[float, Dict[str, Dict[str, Any]]],
+    thresholds: List[float],
+) -> plt.Figure:
+    ordered_codes = [code for code, _ in LANGUAGE_SPECS]
+    n_rows = len(ordered_codes)
+    n_cols = len(thresholds)
+
+    fig = plt.figure(figsize=(10 * n_cols, 5 * n_rows))
+    subfigs = fig.subfigures(nrows=n_rows, ncols=n_cols)
+    # fig.subplots_adjust(
+    #     left=0.04,
+    #     right=0.98,
+    #     top=0.80,
+    #     bottom=0.05,
+    #     wspace=0.12,  # more horizontal whitespace between upset panels
+    #     hspace=0.68,
+    # ) # more vertical whitespace between upset panels
+
+    if n_rows == 1 and n_cols == 1:
+        subfig_grid = np.array([[subfigs]], dtype=object)
+    elif n_rows == 1:
+        subfig_grid = np.array([subfigs], dtype=object)
+    elif n_cols == 1:
+        subfig_grid = np.array([[sub] for sub in subfigs], dtype=object)
+    else:
+        subfig_grid = np.asarray(subfigs, dtype=object)
+
+    labels = [UPSET_MODEL_LABELS[name] for name in UPSET_MODEL_LABELS]
+
+    for row_idx, code in enumerate(ordered_codes):
+        language_name = str(dict(LANGUAGE_SPECS).get(code, code))
+
+        for col_idx, k in enumerate(thresholds):
+            payload = payloads_by_k.get(k, {}).get(code)
+            subfig = subfig_grid[row_idx, col_idx]
+
+            if payload is None:
+                ax = subfig.add_subplot(111)
+                ax.axis("off")
+                ax.text(
+                    0.5,
+                    0.5,
+                    f"No data available\n{language_name}, k={k:.3f}",
+                    ha="center",
+                    va="center",
+                    fontsize=12,
+                )
+                continue
+
+            subtitle = (
+                f"BL1/L1C/L1S/L1E | k={k:.3f} | "
+                f"τ={float(payload['tau']):.4f} | "
+                f"n={int(payload['n_items_considered'])}"
+            )
+            draw_upset_panel(subfig, language_name, subtitle, payload, labels)
+
+    fig.suptitle(
+        "Correctness UpSet by Language and Threshold (BL1/L1C/L1S/L1E)",
+        fontsize=14,
+        y=0.999,
+        fontweight="bold",
+    )
     return fig
 
 
@@ -1249,7 +1318,7 @@ def plot_exclusive_correct_enrichment_by_window(
                 ),
                 dtype=float,
             )
-
+            print(language_code,candidate_counts)  ### !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! debugging print
             if len(candidate_counts) != len(WINDOW_CENTERS):
                 raise ValueError(
                     "Unexpected number of candidate-window counts for "
@@ -1426,7 +1495,9 @@ def plot_upset_thresholds(
 
     payloads_by_k: Dict[float, Dict[str, Dict[str, Any]]] = {}
 
-    for k in [0.05, 0.5]:
+    thresholds = [0.05, 0.5]
+
+    for k in thresholds:
         payload_by_language: Dict[str, Dict[str, Any]] = {}
 
         for language_code, _ in LANGUAGE_SPECS:
@@ -1445,14 +1516,7 @@ def plot_upset_thresholds(
             )
 
         payloads_by_k[k] = payload_by_language
-
-        fig = make_upset_figure(payload_by_language, k)
-        figure_path = output_dir / f"lightgbm_final_upset_k{_k_token(k)}.png"
         json_path = output_dir / f"lightgbm_final_upset_k{_k_token(k)}.json"
-
-        figure_path.parent.mkdir(parents=True, exist_ok=True)
-        fig.savefig(figure_path, dpi=160, bbox_inches="tight")
-        print(f"Saved plot: {figure_path}")
 
         json_path.write_text(
             json.dumps(
@@ -1468,10 +1532,16 @@ def plot_upset_thresholds(
         )
         print(f"Saved UpSet summary: {json_path}")
 
-        if not no_show:
-            plt.show()
+    combined_figure = make_combined_upset_figure(payloads_by_k, thresholds)
+    combined_figure_path = output_dir / "lightgbm_final_upset_k0.05_k0.5.png"
+    combined_figure_path.parent.mkdir(parents=True, exist_ok=True)
+    combined_figure.savefig(combined_figure_path, dpi=160, bbox_inches="tight")
+    print(f"Saved plot: {combined_figure_path}")
 
-        plt.close(fig)
+    if not no_show:
+        plt.show()
+
+    plt.close(combined_figure)
 
     return payloads_by_k
 
