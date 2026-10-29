@@ -27,8 +27,6 @@ MODEL_COLUMN = "model_name"
 PREDICTION_COLUMN = "prediction"
 OUTER_TEST_SPLIT = "outer_test"
 ROBERTA_SCORE_COLUMN = "roberta_base_score"
-CHAR_EDIT_RANGE_LOW = 0.6
-CHAR_EDIT_RANGE_HIGH = 1.0
 HOLM_FAMILY_B_VS_BR_NO_L1 = "B_vs_BR_no_L1"
 HOLM_FAMILY_B_PLUS_L1 = "B_plus_L1_vs_R"
 HOLM_FAMILY_NO_B = "L1ESES_vs_R"
@@ -107,11 +105,9 @@ def _load_roberta_baseline_rows(roberta_predictions_dir: Path) -> pd.DataFrame:
         fold_df[PREDICTION_COLUMN] = fold_df[ROBERTA_SCORE_COLUMN].astype(float)
         fold_df[SPLIT_COLUMN] = OUTER_TEST_SPLIT
         fold_df[MODEL_COLUMN] = "B"
+        columns = list(ROW_KEY_COLUMNS) + [LEVENSHTEIN_COLUMN, LABEL_COLUMN, PREDICTION_COLUMN, SPLIT_COLUMN, MODEL_COLUMN]
         parts.append(
-            fold_df[
-                ROW_KEY_COLUMNS
-                + [LEVENSHTEIN_COLUMN, LABEL_COLUMN, PREDICTION_COLUMN, SPLIT_COLUMN, MODEL_COLUMN]
-            ]
+            fold_df.reindex(columns=columns)
         )
 
     if not parts:
@@ -131,20 +127,10 @@ def _paired_rows(
     base_model: str,
     r_model: str,
     language: Optional[str],
-    char_edit_range: Optional[Tuple[float, float]] = None,
 ) -> pd.DataFrame:
     subset = pred_df[pred_df[SPLIT_COLUMN] == OUTER_TEST_SPLIT].copy()
     if language is not None:
         subset = subset[subset[L1_COLUMN] == language].copy()
-    if char_edit_range is not None:
-        low, high = char_edit_range
-        if LEVENSHTEIN_COLUMN not in subset.columns:
-            raise ValueError(
-                f"Missing column '{LEVENSHTEIN_COLUMN}' required for range-restricted significance tests"
-            )
-        # Convert once here so both model slices are filtered consistently.
-        subset[LEVENSHTEIN_COLUMN] = pd.to_numeric(subset[LEVENSHTEIN_COLUMN], errors="coerce")
-        subset = subset[subset[LEVENSHTEIN_COLUMN].between(float(low), float(high), inclusive="both")].copy()
 
     base_df = subset[subset[MODEL_COLUMN] == base_model][ROW_KEY_COLUMNS + [LABEL_COLUMN, PREDICTION_COLUMN]].copy()
     r_df = subset[subset[MODEL_COLUMN] == r_model][ROW_KEY_COLUMNS + [LABEL_COLUMN, PREDICTION_COLUMN]].copy()
@@ -271,14 +257,12 @@ def _compute_one_test(
     n_bootstrap: int,
     rng: np.random.Generator,
     chunk_size: int,
-    char_edit_range: Optional[Tuple[float, float]] = None,
 ) -> Dict[str, Any]:
     paired = _paired_rows(
         pred_df,
         base_model=base_model,
         r_model=r_model,
         language=language,
-        char_edit_range=char_edit_range,
     )
 
     payload: Dict[str, Any] = {
@@ -406,7 +390,6 @@ def _run_experiment(
     alpha: float,
     chunk_size: int,
     seed: int,
-    char_edit_range: Optional[Tuple[float, float]] = None,
 ) -> List[Dict[str, Any]]:
     rng = np.random.default_rng(seed)
     tests: List[Dict[str, Any]] = []
@@ -423,7 +406,6 @@ def _run_experiment(
                     n_bootstrap=n_bootstrap,
                     rng=rng,
                     chunk_size=chunk_size,
-                    char_edit_range=char_edit_range,
                 )
             )
     _apply_multiple_testing_corrections(tests=tests, alpha=alpha)
@@ -454,16 +436,6 @@ def compute_significance(args: argparse.Namespace) -> Dict[str, Any]:
         alpha=float(args.alpha),
         chunk_size=int(args.chunk_size),
         seed=int(args.seed),
-        char_edit_range=None,
-    )
-    range_tests = _run_experiment(
-        pred_df=pred_df,
-        n_permutations=int(args.n_permutations),
-        n_bootstrap=int(args.n_bootstrap),
-        alpha=float(args.alpha),
-        chunk_size=int(args.chunk_size),
-        seed=int(args.seed),
-        char_edit_range=(CHAR_EDIT_RANGE_LOW, CHAR_EDIT_RANGE_HIGH),
     )
 
     return {
@@ -491,26 +463,6 @@ def compute_significance(args: argparse.Namespace) -> Dict[str, Any]:
         "comparisons": [{"base": a, "with_r": b} for a, b in COMPARISONS],
         "subsets": [{"name": name, "language": language} for name, language in SUBSETS],
         "tests": tests,
-        "char_edit_dist_norm_range_experiment": {
-            "range": [CHAR_EDIT_RANGE_LOW, CHAR_EDIT_RANGE_HIGH],
-            "correction": "holm/bh are applied independently within predefined comparison families; computed independently from the full-data experiment",
-            "holm_families": {
-                HOLM_FAMILY_B_VS_BR_NO_L1: [{"base": "B", "with_r": "BR_no_L1"}],
-                HOLM_FAMILY_B_PLUS_L1: [
-                    {"base": "BL1", "with_r": "BR"},
-                    {"base": "BE", "with_r": "BER"},
-                    {"base": "BS", "with_r": "BSR"},
-                    {"base": "BES", "with_r": "BESR"},
-                ],
-                HOLM_FAMILY_NO_B: [
-                    {"base": "L1_only", "with_r": "R"},
-                    {"base": "E", "with_r": "ER"},
-                    {"base": "S", "with_r": "SR"},
-                    {"base": "ES", "with_r": "ESR"},
-                ],
-            },
-            "tests": range_tests,
-        },
     }
 
 
@@ -558,14 +510,6 @@ def _print_results_block(tests: List[Dict[str, Any]], title: str) -> None:
 def print_results(payload: Dict[str, Any]) -> None:
     _print_results_block(payload.get("tests", []), "Significance tests (all outer-test rows)")
 
-    range_payload = payload.get("char_edit_dist_norm_range_experiment", {})
-    range_vals = range_payload.get("range", [CHAR_EDIT_RANGE_LOW, CHAR_EDIT_RANGE_HIGH])
-    low = float(range_vals[0])
-    high = float(range_vals[1])
-    _print_results_block(
-        range_payload.get("tests", []),
-        f"Significance tests (char_edit_dist_norm in [{low:.1f}, {high:.1f}])",
-    )
 
 
 def main() -> None:
