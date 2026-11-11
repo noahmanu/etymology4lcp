@@ -1,14 +1,11 @@
-"""
-Data pooling module for BEA-ST multilingual LCP dataset.
-
-This module combines train/dev/test splits from all source languages (cn, de, es)
-into a single pooled dataset for cross-validation.
-
-Functions
----------
-pool_data()
-    Reads all 9 CSV files and combines them into a single shuffled dataset.
-"""
+# Noah-Manuel Michael
+# Created: 2026-07-01
+# Updated: 2026-11-11
+#
+# Data pooling module for BEA-ST multilingual LCP dataset.
+#
+# This module combines train/dev/test splits from all source languages (cn, de, es)
+# into a single pooled dataset for cross-validation.
 
 import pandas as pd
 from pathlib import Path

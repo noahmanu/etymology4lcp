@@ -1,22 +1,24 @@
-"""
-Text normalization and preprocessing for the pooled dataset.
-
-This module normalizes English target words and L1 source words, preparing
-them for feature computation. Comma-separated alternatives in L1 are preserved
-for later processing (e.g., taking minimum edit distance across alternatives).
-
-Columns added:
-    en_norm  : lowercased, stripped English target word
-    l1_norm  : stripped L1 with brackets/markers/slashes/hyphens removed,
-               but preserving diacritics and capitalization, comma-separated alternatives preserved
-    l1_clean : L1 with bracketed notes removed, diacritics stripped,
-               German markers removed, comma-separated alternatives preserved
-    l1_closest : comma-split L1 alternative (whitespace removed) with minimum geo
-                 Levenshtein-based distance to en_norm
-    char_edit_dist   : raw Levenshtein distance for l1_closest vs en_norm
-    char_edit_dist_geo_norm : Levenshtein distance normalized by sqrt(len(a))*sqrt(len(b))
-    char_edit_dist_norm : Levenshtein distance normalized by max(len(a), len(b))
-"""
+# Noah-Manuel Michael
+# Created: 2026-07-01
+# Updated: 2026-11-11
+#
+# Text normalization and preprocessing for the pooled dataset.
+#
+# This module normalizes English target words and L1 source words, preparing
+# them for feature computation. Comma-separated alternatives in L1 are preserved
+# for later processing (e.g., taking minimum edit distance across alternatives).
+#
+# Columns added:
+#     en_norm  : lowercased, stripped English target word
+#     l1_norm  : stripped L1 with brackets/markers/slashes/hyphens removed,
+#                but preserving diacritics and capitalization, comma-separated alternatives preserved
+#     l1_clean : L1 with bracketed notes removed, diacritics stripped,
+#                German markers removed, comma-separated alternatives preserved
+#     l1_closest : comma-split L1 alternative (whitespace removed) with minimum geo
+#                  Levenshtein-based distance to en_norm
+#     char_edit_dist   : raw Levenshtein distance for l1_closest vs en_norm
+#     char_edit_dist_geo_norm : Levenshtein distance normalized by sqrt(len(a))*sqrt(len(b))
+#     char_edit_dist_norm : Levenshtein distance normalized by max(len(a), len(b))
 
 import unicodedata
 import math
@@ -314,7 +316,7 @@ if __name__ == "__main__":
     df = preprocess_pooled(verbose=True)
 
     # Quick validation
-    print("\n📊 Validation:")
+    print("Validation:")
     print(f"  Total instances: {len(df):,}")
     print(f"  Non-empty en_norm: {df['en_norm'].notna().sum():,}")
     print(f"  Non-empty l1_clean: {df['l1_clean'].notna().sum():,}")
