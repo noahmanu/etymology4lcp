@@ -56,7 +56,7 @@ ORIGINAL_SPLIT_COLUMN = "original_split"
 ORIGINAL_TEST_SPLIT = "test"
 
 BEST_MODEL_SPECS = {
-    "BER_cn": {"model_name": "BER", "languages": ["cn"]},
+    "BESR_cn": {"model_name": "BESR", "languages": ["cn"]},
     "BESR_de": {"model_name": "BESR", "languages": ["de"]},
     "BESR_es": {"model_name": "BESR", "languages": ["es"]},
 }

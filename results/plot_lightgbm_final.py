@@ -1039,6 +1039,7 @@ def draw_upset_panel(
         colors = [combo_color(row["active_labels"]) for row in intersections]
 
         ax_inter.bar(x, y, color=colors, alpha=0.65)
+        ax_inter.set_ylim(0, max(int(y.max()), 1) * 1.10)
         ax_inter.set_ylabel("Count", fontsize=10)
         ax_inter.grid(axis="y", linestyle="--", alpha=0.35)
         ax_inter.set_xticks([])
@@ -1181,8 +1182,18 @@ def make_combined_upset_figure(
     n_rows = len(ordered_codes)
     n_cols = len(thresholds)
 
-    fig = plt.figure(figsize=(10 * n_cols, 5 * n_rows))
-    subfigs = fig.subfigures(nrows=n_rows, ncols=n_cols)
+    title_margin_in = 0.4
+    fig_height = 5 * n_rows + title_margin_in
+    fig = plt.figure(figsize=(10 * n_cols, fig_height))
+    all_subfigs = fig.subfigures(
+        nrows=n_rows + 1,
+        ncols=n_cols,
+        height_ratios=[title_margin_in / 5] + [1] * n_rows,
+        wspace=0.0,
+        hspace=0.0,
+    )
+    all_subfigs = np.asarray(all_subfigs, dtype=object).reshape(n_rows + 1, n_cols)
+    subfigs = all_subfigs[1:]
     # fig.subplots_adjust(
     #     left=0.04,
     #     right=0.98,
@@ -1233,7 +1244,7 @@ def make_combined_upset_figure(
     fig.suptitle(
         "Correctness UpSet by Language and Threshold (BL1/L1C/L1S/L1E)",
         fontsize=14,
-        y=0.999,
+        y=1.0 - 0.2 / fig_height,
         fontweight="bold",
     )
     return fig
