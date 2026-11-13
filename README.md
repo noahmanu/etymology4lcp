@@ -17,6 +17,8 @@ To reproduce our results, please follow the steps below in the specified order.
 Install:  
 pip install -r requirements.txt
 
+### Data Preparation
+
 Run:  
 python pooling.py  
 python preprocessig.py  
@@ -27,6 +29,10 @@ python fill_na.py
 python generate_full_dataset.py  
 python generate_folds.py  
 python generate_cosine_sim_feature.py  
+
+### XLM-RoBERTa Training
+
+### LightGBM Experiments
 
 
 ## Citation
