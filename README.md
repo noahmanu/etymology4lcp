@@ -1,22 +1,28 @@
-This is the repository associated with the paper "Can Word Relatedness Inform Multilingual Lexical Complexity Prediction?" (Michael, Hülsing, Horbach; 2026).
+This is the repository associated with the paper "Etymology Can Inform Lexical Complexity Prediction" (Michael et al., 2026). In: Proceedings of the 15th Workshop on Natural Language Processing for Computer Assisted Language Learning (NLP4CALL 2026).
 
 ---
 
 ## Quick Overview
 
-**Research Question**: Do word relatedness features improve multilingual lexical complexity prediction?
+**Research Question**: Do word etymology features improve multilingual lexical complexity prediction?
 
-**Dataset**: BEA-ST (German, Spanish, Mandarin Chinese → English)  
-**Model**: RoBERTa → LightGBM with 6 feature configurations  
+**Dataset**: 2026 BEA shared-task dataset on vocabulary difficulty prediction for English learners (German, Spanish, Mandarin Chinese → English)  
+**Model**: RoBERTa → LightGBM
 **Validation**: 5-fold outer × 4-fold inner CV
 
 
-Run pipeline:
-pooling
-preprocessig
-similarity features
-established features
-relatedness features
-generate full dataset
-generate folds
-cosine sim feature
+To reproduce our results, please follow the steps below in the specified order.
+
+Install:
+pip install -r requirements.txt
+
+Run:
+python pooling.py
+python preprocessig.py
+python generate_similarity_features.py
+python generate_established_features.py
+python generate_relatedness_features.py
+python fill_na.py
+python generate_full_dataset.py
+python generate_folds.py
+python generate_cosine_sim_feature.py
