@@ -36,22 +36,22 @@ pip install -r requirements.txt
 
 ### Data Preparation and Feature Generation
 
-Run in order:
+Run from the repository root:
 ```bash
-python pooling.py  
-python preprocessig.py  
-python generate_similarity_features.py  
-python generate_established_features.py  
-python generate_relatedness_features.py  
-python fill_na.py  
-python generate_full_dataset.py  
-python generate_folds.py  
-python generate_cosine_sim_feature.py  
+python data/pooling.py
+python data/preprocessing.py
+python features/similarity/generate_similarity_features.py
+python features/established/generate_established_LCP_features.py
+python features/relatedness/generate_relatedness_features.py
+python features/relatedness/fill_na.py
+python data/feature_enriched/generate_full_dataset.py
+python data/feature_enriched/folds/generate_folds.py
+python features/similarity/generate_cosine_sim_feature.py
 ```
 
 ### XLM-RoBERTa Training
 
-Train the five outer-fold models and their inner-fold models using the HPC submission script, then generate predictions:
+From the repository root, train the five outer-fold models and their inner-fold models using the HPC submission script, then generate predictions:
 
 ```bash
 bash models/submit_roberta_finetune.sh
@@ -64,7 +64,7 @@ Training uses 5 epochs, batch size 32, maximum sequence length 256, and seed 667
 
 ### LightGBM Experiments
 
-Run in order:
+Run from the repository root, in order:
 
 ```bash
 python models/train_lightgbm_final.py

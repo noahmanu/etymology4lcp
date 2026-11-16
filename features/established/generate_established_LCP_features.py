@@ -5,10 +5,13 @@
 
 import pandas as pd
 import syllables
+from pathlib import Path
+
 pd.set_option('display.max_columns', None)
 
-FREQ_PATH = "../../data/original/SUBTLEX-UK.xlsx"
-DATA_PATH = "../../data/pooled/pooled_preprocessed.csv"
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+FREQ_PATH = PROJECT_ROOT / "data" / "original" / "SUBTLEX-UK.xlsx"
+DATA_PATH = PROJECT_ROOT / "data" / "pooled" / "pooled_preprocessed.csv"
 
 _US_TO_UK_SPELLING = {
     "industrialization": "industrialisation",
@@ -18,11 +21,11 @@ _US_TO_UK_SPELLING = {
 }
 
 
-def load_subtlex_frequencies(FREQ_PATH: str) -> pd.DataFrame:
+def load_subtlex_frequencies(freq_path: Path) -> pd.DataFrame:
     """
     Load SUBTLEX-UK frequency data and return a DataFrame with lowercase spelling and log frequency.
     """
-    freq_df = pd.read_excel(FREQ_PATH, usecols=["Spelling", "LogFreq(Zipf)"])
+    freq_df = pd.read_excel(freq_path, usecols=["Spelling", "LogFreq(Zipf)"])
     freq_df["spelling_lower"] = freq_df["Spelling"].str.lower()
     freq_df = freq_df.drop(columns=["Spelling"])
     # Drop duplicates keeping the first occurrence

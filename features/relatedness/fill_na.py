@@ -1,8 +1,11 @@
+from pathlib import Path
+
 import pandas as pd
 from pandas._libs.parsers import STR_NA_VALUES
 
-csv_path = "output/relatedness_features_gpt-5.6-luna.csv"
-csv_path_out = "output/relatedness_features_gpt-5.6-luna_nafilled.csv"
+OUTPUT_DIR = Path(__file__).resolve().parent / "output"
+csv_path = OUTPUT_DIR / "relatedness_features_gpt-5.6-luna.csv"
+csv_path_out = OUTPUT_DIR / "relatedness_features_gpt-5.6-luna_nafilled.csv"
 
 # Keep pandas NA detection, but treat literal "None" as a real string value.
 na_values_without_none = set(STR_NA_VALUES) - {"None"}
