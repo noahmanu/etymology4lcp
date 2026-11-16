@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create final LightGBM plots from evaluate_lightgbm_final.py output."""
+"""Plot final LightGBM group, UpSet, and enrichment analyses."""
 
 from __future__ import annotations
 
@@ -15,32 +15,29 @@ import pandas as pd
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-try:
-    from lightgbm_results_utils import (
-        ID_COLUMN,
-        LABEL_COLUMN,
-        L1_COLUMN,
-        LANGUAGE_SPECS,
-        LEVENSHTEIN_COLUMN,
-        WINDOW_CENTERS,
-        WINDOW_LOWS,
-        WINDOW_WIDTH,
-        center_mask,
-        parse_center_range,
-    )
-except ModuleNotFoundError:
-    from results.lightgbm_results_utils import (
-        ID_COLUMN,
-        LABEL_COLUMN,
-        L1_COLUMN,
-        LANGUAGE_SPECS,
-        LEVENSHTEIN_COLUMN,
-        WINDOW_CENTERS,
-        WINDOW_LOWS,
-        WINDOW_WIDTH,
-        center_mask,
-        parse_center_range,
-    )
+ID_COLUMN = "item_id"
+LABEL_COLUMN = "GLMM_score"
+L1_COLUMN = "L1"
+LEVENSHTEIN_COLUMN = "char_edit_dist_norm"
+LANGUAGE_SPECS = [("de", "German"), ("es", "Spanish"), ("cn", "Mandarin")]
+WINDOW_LOWS = np.arange(0.0, 0.9, 0.1)
+WINDOW_WIDTH = 0.2
+WINDOW_CENTERS = np.round(WINDOW_LOWS + WINDOW_WIDTH / 2.0, 1)
+
+
+def parse_center_range(raw: str, label: str) -> tuple[float, float]:
+    parts = raw.strip().split("-")
+    if len(parts) != 2:
+        raise ValueError(f"Invalid {label} center range '{raw}'. Use low-high, e.g. 0.3-0.7")
+    low, high = map(float, parts)
+    if low > high:
+        raise ValueError(f"Invalid {label} center range '{raw}': low must be <= high")
+    return low, high
+
+
+def center_mask(range_low: float, range_high: float) -> np.ndarray:
+    return (WINDOW_CENTERS >= range_low) & (WINDOW_CENTERS <= range_high)
+
 
 DEFAULT_METRICS_JSON = PROJECT_ROOT / "results" / "lightgbm_final_metrics.json"
 DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "results" / "figures"
@@ -225,32 +222,8 @@ L1_GROUP_STYLES = {
     },
 }
 
-RELATEDNESS_FEATURES = [
-    "lca_language",
-    "borrowed_from_source",
-    "borrowed_from_target",
-    "borrowed_from_third",
-    "english_word_origin",
-    "origin_matches_source_family",
-    "same_proto_word",
-    "same_proto_root",
-    "transmission_path",
-]
 
-FEATURE_COLOR_MAP = {
-    "lca_language": "deeppink",
-    "borrowed_from_source": "forestgreen",
-    "borrowed_from_target": "seagreen",
-    "borrowed_from_third": "mediumseagreen",
-    "english_word_origin": "gold",
-    "origin_matches_source_family": "darkorange",
-    "same_proto_word": "royalblue",
-    "same_proto_root": "dodgerblue",
-    "transmission_path": "mediumpurple",
-}
 
-LINESTYLES = ["--", "-.", ":"]
-MARKERS = ["o", "s", "^", "D", "v", "P", "X", "*"]
 
 WINDOW_BAR_COLOR = "gray"
 WINDOW_BAR_ALPHA = 0.1
@@ -590,128 +563,6 @@ def plot_l1_group_curves_with_glmm(
     plt.close(fig)
 
 
-def plot_relatedness_individual_curves_with_window_sizes(
-    summary: Dict[str, Any],
-    output_path: Path,
-    range_by_language: Dict[str, tuple[float, float]],
-    no_show: bool,
-) -> None:
-    model_specs: List[Tuple[str, str, str]] = [
-        ("raw_roberta", "B", "black"),
-        ("BL1", r"B$^{\mathrm{L1}}$", "gray"),
-    ]
-
-    for feature_name in RELATEDNESS_FEATURES:
-        model_name = f"BL1_plus_{feature_name}"
-        if model_name in summary.get("models", {}):
-            model_specs.append(
-                (
-                    model_name,
-                    f"+ {feature_name}",
-                    FEATURE_COLOR_MAP.get(feature_name, "tab:gray"),
-                )
-            )
-
-    if len(model_specs) == 1:
-        raise ValueError("No BL1 relatedness individual-feature models were found.")
-
-    fig, axes = plt.subplots(3, 1, figsize=(8, 20), sharex=False)
-
-    for ax, (language_code, language_name) in zip(axes, LANGUAGE_SPECS):
-        low, high = range_by_language[language_code]
-        mask = center_mask(low, high)
-        ticks = WINDOW_CENTERS[mask]
-
-        if len(ticks) == 0:
-            raise ValueError(f"No centers selected for {language_code}: {low}-{high}")
-
-        style_idx = 0
-        reference_counts: np.ndarray | None = None
-
-        for model_name, label, color in model_specs:
-            arrays = model_windows(summary, model_name, language_code)
-            if arrays is None:
-                continue
-
-            rmses, counts = arrays
-            if reference_counts is None:
-                reference_counts = counts
-
-            if model_name in {"raw_roberta", "BL1"}:
-                style = {
-                    "linestyle": "-",
-                    "marker": "o",
-                    "linewidth": 3.0,
-                    "alpha": 1.0 if model_name == "raw_roberta" else 0.9,
-                }
-            else:
-                style = {
-                    "linestyle": LINESTYLES[style_idx % len(LINESTYLES)],
-                    "marker": MARKERS[style_idx % len(MARKERS)],
-                    "linewidth": 4.5,
-                    "alpha": 0.60,
-                }
-                style_idx += 1
-
-            ax.plot(
-                ticks,
-                rmses[mask],
-                color=color,
-                label=label,
-                linestyle=str(style["linestyle"]),
-                marker=str(style["marker"]),
-                linewidth=float(style["linewidth"]),
-                alpha=float(style["alpha"]),
-                markersize=7,
-                markeredgecolor="white",
-                markeredgewidth=1.0,
-                zorder=3,
-            )
-
-        ax2: plt.Axes | None = None
-        if reference_counts is not None:
-            ax2 = add_window_count_axis(ax, ticks, reference_counts[mask])
-
-        ax.set_title(language_name, fontsize=12)
-        ax.set_ylabel("RMSE", fontsize=12)
-        ax.invert_yaxis()
-        ax.grid(True, linestyle="--", alpha=0.5)
-        ax.set_xticks(ticks)
-        ax.set_xticklabels([f"{center:.1f}" for center in ticks])
-        ax.set_xlim(float(ticks.min()) - 0.02, float(ticks.max()) + 0.02)
-
-        if language_code == "cn":
-            h1, l1 = ax.get_legend_handles_labels()
-            h2, l2 = ([], []) if ax2 is None else ax2.get_legend_handles_labels()
-            ax.legend(
-                h1 + h2,
-                l1 + l2,
-                fontsize=10,
-                title="Configuration",
-                title_fontsize=12,
-                loc="lower right",
-            )
-
-    axes[-1].set_xlabel(
-        "Normalized Levenshtein Distance (Window Center)",
-        fontsize=14,
-    )
-    fig.suptitle(
-        "BL1 Individual Relatedness Features by Levenshtein Window",
-        fontsize=13,
-        y=0.99,
-        fontweight="bold",
-    )
-    plt.tight_layout(rect=(0, 0, 1, 0.995))
-
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(output_path, dpi=150, bbox_inches="tight")
-    print(f"Saved plot: {output_path}")
-
-    if not no_show:
-        plt.show()
-
-    plt.close(fig)
 
 
 def load_predictions_from_summary(summary: Dict[str, Any]) -> pd.DataFrame:
@@ -928,6 +779,8 @@ def analyze_upset_language(
     subset_df: pd.DataFrame,
     model_to_label: Dict[str, str],
     k: float,
+    *,
+    print_exclusive_rows: bool = True,
 ) -> Dict[str, Any]:
     x = subset_df.copy()
     x["abs_error"] = (
@@ -972,13 +825,14 @@ def analyze_upset_language(
     flags = pd.DataFrame(flags_payload)
     exclusive_masks = unique_correct_masks(flags, labels)
 
-    print_only_l1e_correct_rows(
-        subset_df=x,
-        flags=flags,
-        model_to_label=model_to_label,
-        tau=tau,
-        k=k,
-    )
+    if print_exclusive_rows:
+        print_only_l1e_correct_rows(
+            subset_df=x,
+            flags=flags,
+            model_to_label=model_to_label,
+            tau=tau,
+            k=k,
+        )
 
     return {
         "tau": tau,
@@ -1592,15 +1446,6 @@ def main() -> None:
         no_show=args.no_show,
     )
 
-    plot_relatedness_individual_curves_with_window_sizes(
-        summary=summary,
-        output_path=(
-            args.output_dir
-            / "lightgbm_final_sliding_relatedness_individual_window_sizes.png"
-        ),
-        range_by_language=range_by_language,
-        no_show=args.no_show,
-    )
 
     upset_payloads_by_k = plot_upset_thresholds(
         summary=summary,
