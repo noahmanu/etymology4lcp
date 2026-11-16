@@ -1,4 +1,4 @@
-This is the repository associated with the paper "Noah-Manuel Michael, Anna Hülsing, and Andrea Horbach. 2026. Etymology Can Inform Lexical Complexity Prediction. In Proceedings of the 15th Workshop on Natural Language Processing for Computer Assisted Language Learning (NLP4CALL 2026).
+This is the repository associated with the paper "Noah-Manuel Michael, Anna Hülsing, and Andrea Horbach. 2026. Etymology Can Inform Lexical Complexity Prediction. In Proceedings of the 15th Workshop on Natural Language Processing for Computer Assisted Language Learning (NLP4CALL 2026)."
 
 ---
 
