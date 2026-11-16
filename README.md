@@ -1,4 +1,4 @@
-This is the repository associated with the paper "Etymology Can Inform Lexical Complexity Prediction" (Michael, Hülsing, Horbach; 2026). In: Proceedings of the 15th Workshop on Natural Language Processing for Computer Assisted Language Learning (NLP4CALL 2026).
+This is the repository associated with the paper "Noah-Manuel Michael, Anna Hülsing, and Andrea Horbach. 2026. Etymology Can Inform Lexical Complexity Prediction. In Proceedings of the 15th Workshop on Natural Language Processing for Computer Assisted Language Learning (NLP4CALL 2026).
 
 ---
 
@@ -17,6 +17,10 @@ This is the repository associated with the paper "Etymology Can Inform Lexical C
 
 ## Findings
 
+Etymology features improve prediction across most model configurations for German, Spanish, and Mandarin. Their contribution is clearest for German and Spanish at moderate surface distances (NLD 0.3–0.7); for Mandarin, gains are less concentrated. This suggests etymological information complements surface similarity, particularly when related words look less alike.
+
+![Enrichment of exclusive correct predictions by normalized Levenshtein distance and language](results/figures/lightgbm_final_exclusive_correct_enrichment_by_window.png)
+
 ## Abstract
 
 In Lexical Complexity Prediction (LCP) for second-language learners, cross-linguistic cognacy and borrowing relationships are commonly approximated using surface similarity. However, historical sound changes and orthographic differences can obscure etymological relationships that still facilitate vocabulary production. We investigate whether etymology-based features improve LCP for learners of English with German, Spanish, or Mandarin as source languages, using the 2026 BEA shared-task dataset. We expect etymological information to be most informative for German and Spanish, where historical relationships with English are frequent but often obscured by divergence. 
@@ -26,11 +30,14 @@ Mining Wiktionary etymologies, we derive nine etymology features for source-targ
 To reproduce our results, please follow the steps below in the specified order.
 
 Install:  
+```bash
 pip install -r requirements.txt
+```
 
 ### Data Preparation and Feature Generation
 
-Run:  
+Run in order:
+```bash
 python pooling.py  
 python preprocessig.py  
 python generate_similarity_features.py  
@@ -40,11 +47,32 @@ python fill_na.py
 python generate_full_dataset.py  
 python generate_folds.py  
 python generate_cosine_sim_feature.py  
+```
 
 ### XLM-RoBERTa Training
 
+Train the five outer-fold models and their inner-fold models using the HPC submission script, then generate predictions:
+
+```bash
+bash models/submit_roberta_finetune.sh
+python models/predict_roberta_cv.py --folds-dir data/feature_enriched/folds \
+  --models-dir models/roberta_models --output-dir models/roberta_predictions
+```
+
+The submission script requires adapting its paths and Slurm settings to your HPC system.
+Training uses 5 epochs, batch size 32, maximum sequence length 256, and seed 667.
+
 ### LightGBM Experiments
 
+Run in order:
+
+```bash
+python models/train_lightgbm_final.py
+python models/predict_lightgbm_final.py
+python results/evaluate_lightgbm_final.py
+python results/plot_lightgbm_final.py
+python results/plot_lightgbm_final_individual.py
+```
 
 ## Citation
 
@@ -55,5 +83,5 @@ BibTex:
   booktitle = {Proceedings of the 15th Workshop on NLP for Computer-Assisted Language Learning (NLP4CALL)},  
   year      = {2026},  
   publisher = {LiU Electronic Press},  
-  note      = {To appear},  
+  note      = {In press},  
 }
