@@ -29,7 +29,7 @@ Mining Wiktionary etymologies, we derive nine etymology features for source-targ
 ## Reproduction
 To reproduce our results, please follow the steps below in the specified order.
 
-Install:  
+In your environment, install:  
 ```bash
 pip install -r requirements.txt
 ```
