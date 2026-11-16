@@ -34,6 +34,14 @@ In your environment, install:
 pip install -r requirements.txt
 ```
 
+Additional resources required:
+
+- `data/original/SUBTLEX-UK.xlsx` (SUBTLEX-UK frequencies; used by `features/established/generate_established_LCP_features.py`)
+- `features/similarity/cedict_ts.u8` (CC-CEDICT file for Mandarin transliteration in similarity features)
+- Wiktionary JSONL extracts for the English, German, Spanish, and Chinese editions in `features/relatedness/`, named `en-extract.jsonl.gz`, `de-extract.jsonl.gz`, `es-extract.jsonl.gz`, and `zh-extract.jsonl.gz`
+- OpenAI API key via `features/relatedness/open_api_key.txt` (used by `features/relatedness/generate_relatedness_features.py`)
+- Local `xlm-roberta-base` checkpoint for RoBERTa training/prediction (set `PRETRAINED_MODEL_PATH` in `models/roberta_cv_utils.py`)
+
 ### Data Preparation and Feature Generation
 
 Run from the repository root:
@@ -42,6 +50,7 @@ python data/pooling.py
 python data/preprocessing.py
 python features/similarity/generate_similarity_features.py
 python features/established/generate_established_LCP_features.py
+python features/relatedness/wiktionary_parse.py  
 python features/relatedness/generate_relatedness_features.py
 python features/relatedness/fill_na.py
 python data/feature_enriched/generate_full_dataset.py
