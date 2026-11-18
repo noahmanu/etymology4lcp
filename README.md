@@ -84,13 +84,17 @@ python results/plot_lightgbm_final_individual.py
 ```
 
 ## Citation
+If you use this code or the results of this work in your own research, please cite the following:
 
 BibTex:  
+```bash
 @inproceedings{michael2026etymology,  
   title     = {Etymology Can Inform Lexical Complexity Prediction},  
   author    = {Michael, Noah-Manuel and Hülsing, Anna and Horbach, Andrea},  
-  booktitle = {Proceedings of the 15th Workshop on NLP for Computer-Assisted Language Learning (NLP4CALL)},  
+  booktitle = {Proceedings of the 15th Workshop on NLP for Computer-Assisted Language Learning},  
   year      = {2026},  
-  publisher = {LiU Electronic Press},  
-  note      = {In press},  
+  publisher = {University of Tartu Library},   
+  pages     = {173--196},
+  address   = {Gothenburg, Sweden},
 }
+```
